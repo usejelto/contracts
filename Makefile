@@ -32,7 +32,10 @@ package:
 # Reject unexpectedly short responses so an upstream error cannot erase
 # historical spam classification.
 SPAM_UPSTREAM_REPO ?= https://github.com/matomo-org/referrer-spam-list.git
-SPAM_UPSTREAM_URL ?= https://raw.githubusercontent.com/matomo-org/referrer-spam-list/master/spammers.txt
+# The list is fetched at the commit `git ls-remote` resolved, never at a branch name, so the
+# `# Pinned:` header names the bytes that were actually read rather than whatever the branch
+# pointed at a moment later.
+SPAM_UPSTREAM_RAW ?= https://raw.githubusercontent.com/matomo-org/referrer-spam-list
 SPAM_READ_FILE := spec/signatures/referrer-spam-read.txt
 SPAM_INGEST_FILE := spec/signatures/referrer-spam.txt
 SPAM_MIN_HOSTS := 1000
@@ -45,7 +48,7 @@ signatures: ## Refresh the generated referrer-spam read table and print every si
 	commit=$$(git ls-remote $(SPAM_UPSTREAM_REPO) HEAD | cut -f1); \
 	test -n "$$commit" || { echo "cannot resolve HEAD of $(SPAM_UPSTREAM_REPO)" >&2; exit 1; }; \
 	body=$$(mktemp); \
-	curl -fsS $(SPAM_UPSTREAM_URL) | tr -d '\r' | tr 'A-Z' 'a-z' | sed -e 's/[[:space:]]//g' -e '/^$$/d' -e '/^#/d' | sort -u > $$body; \
+	curl -fsS "$(SPAM_UPSTREAM_RAW)/$$commit/spammers.txt" | tr -d '\r' | tr 'A-Z' 'a-z' | sed -e 's/[[:space:]]//g' -e '/^$$/d' -e '/^#/d' | sort -u > $$body; \
 	count=$$(grep -c . $$body || true); \
 	test "$$count" -ge $(SPAM_MIN_HOSTS) || { rm -f $$body; echo "refusing to rewrite $(SPAM_READ_FILE): upstream returned $$count hosts, under the $(SPAM_MIN_HOSTS) floor" >&2; exit 1; }; \
 	before=$$(grep -cvE '^#|^$$' $(SPAM_READ_FILE) || true); \
