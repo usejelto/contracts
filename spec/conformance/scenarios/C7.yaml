@@ -1,0 +1,26 @@
+c: C7
+title: the three flush triggers, and a batch of 100
+implements: spec/sdk-conformance.md §4 C7
+notes: |
+  The anchors are the runner's wall clock at the end of a step, compared with
+  mockd's at_unix_ms. mockd's monotonic since_start_us cannot answer "2 s after
+  init" because mockd does not know when init happened; §1's recording carries
+  both clocks precisely so a runner can bridge them.
+arms:
+  - name: init, one track, then 250 at once
+    steps:
+      - run: [init prd_conform001]
+      - run: [sleep 2500]
+      - run: [track x]
+      - run: [sleep 5500]
+      - run: ["track x{i}"]
+        repeat: 250
+      - run: [sleep 6000]
+    assert:
+      - {check: request_after_step, request: 0, step: 0, seconds: 2, slack_ms: 500, why: "2 s after init"}
+      - {check: request_after_step, request: 1, step: 2, seconds: 5, slack_ms: 500, why: "5 s debounce after track"}
+      - {check: request_count, equal: 5}
+      - {check: max_events_per_request, max: 100}
+      - {check: request_shape, request: 2, equal: 100, why: "3 requests of <= 100 events"}
+      - {check: request_shape, request: 3, equal: 100}
+      - {check: request_shape, request: 4, equal: 50}

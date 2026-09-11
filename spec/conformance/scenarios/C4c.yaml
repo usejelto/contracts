@@ -1,0 +1,72 @@
+c: C4c
+title: the install delay persists across a launch and does not restart from 6 h
+implements: spec/sdk-conformance.md §4 C4c
+notes: |
+  TWO arms, and they are not the same test. The first ends the host with `exit`,
+  which is a graceful death: the SDK is told, and §8.3 item 7 gives it a
+  termination flush to write in. The second SIGKILLs it.
+
+  Until 2026-09-02 only the first existed, and `runner/hostproc.go`'s `Kill` --
+  whose comment named this very row -- had NO CALLER. So this scenario asserted
+  persistence across an orderly death for the life of the repo, while RFC-0001
+  §8.2 item 4's "or on next launch if the process ends first" is about a process
+  that ENDS, abruptly included. An SDK that wrote `install_due_at` on the way out
+  rather than at the moment it drew it passed. `spec/conformance/TODO.md` §7 has
+  the finding.
+
+  Two details make arm B discriminate rather than merely differ:
+
+  (1) `installid` before the kill. `init` returns before bootstrap has run
+  (§8.2 item 1, C1), so a kill straight after `init` might land before the SDK
+  has drawn a deadline at all -- and the arm would then be measuring a race
+  instead of a rule. `installid` cannot be answered without the install id, so
+  its reply is proof the SDK has loaded or created its state and drawn the
+  0-6 h deadline. THEN it is killed.
+
+  (2) The anchor is `jelto_now`, which `checks.go` defines as the arm's INITIAL
+  `JELTO_NOW`, whatever the restart later set. The restart moves the clock 7 h
+  on. So an SDK that lost the deadline and redrew it at the second launch lands
+  25 200-46 800 s from that anchor and fails `max: 21600` by construction. The
+  arm cannot pass by redrawing.
+arms:
+  - name: the process ends before the delay elapses
+    env: {JELTO_NOW: "1788134400000"}
+    steps:
+      - run: [init prd_conform001]
+      - restart: {env: {JELTO_NOW: "1788159600000"}}
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: event_names, counts: {install: 1}, why: "install sent on the next launch"}
+      - check: state_deadline
+        path: install_due_at
+        anchor: jelto_now
+        min: 0
+        max: 21600
+        why: >-
+          the deadline is still 0-6 h from the FIRST launch. A delay restarted
+          at the second launch would be 25 200-46 800 s from here.
+
+  - name: the process is KILLED before the delay elapses -- no exit, no flush
+    env: {JELTO_NOW: "1788134400000"}
+    steps:
+      - run: [init prd_conform001, installid]
+      - kill_host: true
+      - restart: {env: {JELTO_NOW: "1788159600000"}}
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - check: event_names
+        counts: {install: 1}
+        why: >-
+          the install is sent on the next launch, exactly as in arm A. A SIGKILL
+          is not a reason to send two, and it is not a reason to send none.
+      - check: state_deadline
+        path: install_due_at
+        anchor: jelto_now
+        min: 0
+        max: 21600
+        why: >-
+          the deadline the FIRST launch drew survived a death it was never told
+          about. This is the clause arm A cannot make: with `exit`, an SDK that
+          persists nothing until its termination flush still passes, because the
+          flush happens. Here there is no flush. A deadline redrawn at the second
+          launch is 25 200-46 800 s from this anchor and fails.

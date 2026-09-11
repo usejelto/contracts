@@ -1,0 +1,13 @@
+c: C5
+title: before init nothing happens -- no file, no socket
+implements: spec/sdk-conformance.md §4 C5
+arms:
+  - name: ten tracks with no init
+    steps:
+      - run: [track x]
+        repeat: 10
+      - run: [sleep 5000]
+    assert:
+      - {check: request_count, equal: 0, why: "recording empty"}
+      - {check: connection_count, equal: 0, why: "no socket opened"}
+      - {check: state_dir_empty, why: "state dir empty"}

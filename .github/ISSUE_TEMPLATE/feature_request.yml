@@ -1,0 +1,33 @@
+name: Feature request
+description: Propose an improvement to Jelto contracts.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing requests first and discuss substantial changes before implementing them.
+        Follow our [Code of Conduct](https://github.com/usejelto/contracts/blob/main/CODE_OF_CONDUCT.md).
+        Keep security reports private: email taha@jelto.io.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Who needs this and what are they trying to do? Use synthetic examples.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the expected outcome and relevant platform or runtime.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing features, workarounds, or other approaches you considered.
+  - type: textarea
+    id: impact
+    attributes:
+      label: Compatibility and privacy impact
+      description: Optional notes about affected APIs, stored data, or migration needs.

@@ -1,0 +1,20 @@
+c: C23b
+title: missing versions establish no baseline and never erase a known version
+implements: spec/sdk-conformance.md §7
+arms:
+  - name: unknown, known baseline, unknown, known change
+    env: {JELTO_NOW: "1788134400000", JELTO_APP_VERSION: ""}
+    steps:
+      - run: [init prd_conform001, sleep 25200000]
+      - restart: {env: {JELTO_NOW: "1788159600000", JELTO_APP_VERSION: "1.0"}}
+      - run: [init prd_conform001, sleep 3000]
+      - restart: {env: {JELTO_APP_VERSION: " "}}
+      - run: [init prd_conform001, sleep 3000]
+      - restart: {env: {JELTO_APP_VERSION: "123456789012345678901234567890123"}}
+      - run: [init prd_conform001, sleep 3000]
+      - restart: {env: {JELTO_APP_VERSION: "2.0"}}
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: event_names, counts: {heartbeat: 1, install: 1, app_updated: 1}}
+      - {check: app_updates, values: ["1.0=>2.0"]}
+      - {check: state, path: last_app_version, value: '"2.0"'}

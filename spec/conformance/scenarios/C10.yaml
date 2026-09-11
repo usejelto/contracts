@@ -1,0 +1,20 @@
+c: C10
+title: garbage, a 500, an oversized body and a timeout, and the host still exits 0 in silence
+implements: spec/sdk-conformance.md §4 C10
+arms:
+  - name: four bad answers in a row, JELTO_DEBUG unset
+    mock_script:
+      - {mode: garbage}
+      - {mode: "500"}
+      - {mode: "huge:2000000"}
+      - {mode: "slow:10000"}
+    mock_default: ok
+    steps:
+      - run: [init prd_conform001]
+      - run: ["track x{i}"]
+        repeat: 300
+      - run: [sleep 12000]
+    assert:
+      - {check: exit_code, equal: 0, why: "host exit code 0"}
+      - {check: stderr, empty: true, why: "nothing written to stderr except with JELTO_DEBUG=1"}
+      - {check: request_count, min: 4, why: "every scripted answer was actually met"}

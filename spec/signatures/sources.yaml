@@ -1,0 +1,202 @@
+# spec/signatures/sources.yaml — traffic-source classification of referrer hostnames, ON READ.
+# Status: v0.6 · Gates: M1 · Seeded from EQBase's stats-worker.
+#
+# Input: ref_host (hostname, "www." stripped) or an app-side "ref:<host>" cohort.
+#
+# TWO layers, in this order (spec/metrics.md §6):
+#   1. `exact_hosts` — the host itself or one of its subdomains. FIRST MATCH WINS.
+#   2. `signatures`  — lower-case SUBSTRING. FIRST MATCH WINS (gemini.google before google).
+# Unmatched hosts keep their own hostname as the label (category: other) so a new channel is
+# never folded away. Empty → Direct. One of the product's own domains → Site.
+#
+# Layer 0 runs before both of them and lives in its own file: a host on
+# spec/signatures/referrer-spam-read.txt is labelled `rules.spam` and never reaches these two
+# tables (spec/metrics.md §6b). It is a label, not a rejection — the rejection list is the short
+# spec/signatures/referrer-spam.txt, and it is applied at ingest, never here.
+#
+# A needle that is a whole hostname belongs in `exact_hosts`, NEVER in `signatures`. A short
+# host-shaped needle in the substring table matches the middle of ordinary domains, and the
+# label it puts there is wrong for every one of them. Executed on ClickHouse 24.8.14.39 against
+# this file's own needle array, when `t.co` and `x.com` were substrings:
+#
+#   x.com  ->  netflix.com  linux.com  mailbox.com  dropbox.com  phoenix.com
+#              matrix.com   nginx.com  citrix.com   equinix.com  xerox.com
+#   t.co   ->  cnet.com  microsoft.com  getpocket.com  pocket.com  ft.com
+#              target.com  budget.com  gadget.com  widget.com  pinterest.com  sport.co.uk
+#
+# — 25 ordinary domains, Pinterest among them, all reported as "X (Twitter)". Classification is
+# on-read, so moving them here corrects every historical row at the next query; no stored row
+# changed and no count moved. That is the property this table exists to have. Keep it: before
+# adding a needle, ask whether it is a BRAND TOKEN (substring) or a HOSTNAME (exact).
+#
+# categories: ai · search · community · social · email · site · direct · spam · other
+#
+# `aliases` and `paid_sources` are read by the SAME expression as the two needle tables
+# (spec/metrics.md §6, §6c). A tagged utm_source is canonicalised through `aliases` FIRST and
+# the resolved label is what carries the category -- so `?utm_source=newsletter` arriving from
+# t.co is a Newsletter in the `email` category, not the `social` one its referrer would have
+# given it. Every alias target therefore MUST have a category: from its own row in the two
+# tables below, or from `alias_categories` when no referrer host produces that label. The
+# loader refuses to start on an alias that resolves to no category, because the failure is
+# silent otherwise -- a chip in the wrong channel is still a chip.
+
+rules:
+  direct: { label: Direct, category: direct }
+  own_domain: { label: Site, category: site }
+  unmatched: { label: "<hostname>", category: other, max_len: 40 }
+  # Layer 0 (spec/metrics.md §6b). The hosts are in referrer-spam-read.txt because they are
+  # generated and there are thousands of them; the LABEL is here, with the other rule labels,
+  # because it is one of the source table's answers. One bucket, not one row per spam host:
+  # naming the individual spammer would put its domain on the customer's screen, which is the
+  # attention the referrer spam was sent to buy.
+  spam: { label: "Referrer spam", category: spam }
+
+# Layer 1. Matched as `ref_host = needle OR endsWith(ref_host, '.' || needle)`, in file order.
+# These are whole hostnames: their brand token is either too short to be a safe substring
+# (t.co, x.com, t.me) or is not a token at all (youtu.be, lobste.rs).
+exact_hosts:
+  - { needle: t.co,               label: X (Twitter),         category: social }
+  - { needle: x.com,              label: X (Twitter),         category: social }
+  - { needle: t.me,               label: Telegram,            category: social }
+  - { needle: youtu.be,           label: YouTube,             category: social }
+  - { needle: you.com,            label: You.com,             category: ai }
+  - { needle: poe.com,            label: Poe,                 category: ai }
+  - { needle: kagi.com,           label: Kagi,                category: search }
+  - { needle: claude.ai,          label: Claude,              category: ai }
+  - { needle: mistral.ai,         label: Mistral (Le Chat),   category: ai }
+  - { needle: lobste.rs,          label: Lobsters,            category: community }
+  - { needle: threads.net,        label: Threads,             category: social }
+
+# Layer 2. Brand tokens, matched as a lower-case substring, first match wins.
+signatures:
+  # AI assistants
+  - { needle: chatgpt,            label: ChatGPT,             category: ai }
+  - { needle: chat.openai,        label: ChatGPT,             category: ai }
+  - { needle: openai,             label: ChatGPT,             category: ai }
+  - { needle: perplexity,         label: Perplexity,          category: ai }
+  - { needle: anthropic,          label: Claude,              category: ai }
+  - { needle: gemini.google,      label: Gemini,              category: ai }
+  - { needle: bard.google,        label: Gemini,              category: ai }
+  - { needle: copilot.microsoft,  label: Microsoft Copilot,   category: ai }
+  - { needle: copilot,            label: Microsoft Copilot,   category: ai }
+  - { needle: deepseek,           label: DeepSeek,            category: ai }
+  - { needle: grok,               label: Grok,                category: ai }
+  # Search engines
+  - { needle: duckduckgo,         label: DuckDuckGo,          category: search }
+  - { needle: search.brave,       label: Brave Search,        category: search }
+  - { needle: ecosia,             label: Ecosia,              category: search }
+  - { needle: startpage,          label: Startpage,           category: search }
+  - { needle: qwant,              label: Qwant,               category: search }
+  - { needle: googlequicksearchbox, label: Google,            category: search }
+  - { needle: mail.google,        label: Gmail,               category: email }
+  - { needle: google,             label: Google,              category: search }
+  - { needle: bing,               label: Bing,                category: search }
+  - { needle: yandex,             label: Yandex,              category: search }
+  - { needle: baidu,              label: Baidu,               category: search }
+  - { needle: seznam,             label: Seznam,              category: search }
+  - { needle: naver,              label: Naver,               category: search }
+  # Communities / dev
+  - { needle: news.ycombinator,   label: Hacker News,         category: community }
+  - { needle: reddit,             label: Reddit,              category: community }
+  - { needle: github,             label: GitHub,              category: community }
+  - { needle: stackoverflow,      label: Stack Overflow,      category: community }
+  - { needle: stackexchange,      label: Stack Exchange,      category: community }
+  - { needle: producthunt,        label: Product Hunt,        category: community }
+  - { needle: alternativeto,      label: AlternativeTo,       category: community }
+  - { needle: macrumors,          label: MacRumors,           category: community }
+  - { needle: discourse,          label: Discourse forum,     category: community }
+  - { needle: setapp,             label: Setapp,              category: community }
+  # Social / messaging
+  - { needle: twitter,            label: X (Twitter),         category: social }
+  - { needle: facebook,           label: Facebook,            category: social }
+  - { needle: instagram,          label: Instagram,           category: social }
+  - { needle: linkedin,           label: LinkedIn,            category: social }
+  - { needle: youtube,            label: YouTube,             category: social }
+  - { needle: tiktok,             label: TikTok,              category: social }
+  - { needle: telegram,           label: Telegram,            category: social }
+  - { needle: whatsapp,           label: WhatsApp,            category: social }
+  - { needle: discord,            label: Discord,             category: social }
+  - { needle: slack,              label: Slack,               category: social }
+  - { needle: mastodon,           label: Mastodon,            category: social }
+  - { needle: bsky,               label: Bluesky,             category: social }
+  # Mail / newsletters
+  - { needle: outlook,            label: Outlook,             category: email }
+  - { needle: substack,           label: Substack,            category: email }
+
+category_labels:
+  ai: AI
+  search: Search
+  community: Community
+  social: Social
+  email: Email
+  site: Site
+  direct: Direct
+  other: Other
+  spam: Referrer spam
+
+# Fixed order for the source donut — CVD-validated adjacency; never size-ordered.
+donut_order: [search, ai, community, social, email, site, direct, other, spam]
+
+# utm_source shorthands → canonical label, matched case-insensitively on READ, so a tagged
+# source merges with its referrer-derived twin. Plausible keeps the same list in custom_sources.json.
+aliases:
+  ig: Instagram
+  insta: Instagram
+  fb: Facebook
+  facebook: Facebook
+  tw: X (Twitter)
+  twitter: X (Twitter)
+  x: X (Twitter)
+  li: LinkedIn
+  linkedin: LinkedIn
+  yt: YouTube
+  youtube: YouTube
+  hn: Hacker News
+  hackernews: Hacker News
+  ph: Product Hunt
+  producthunt: Product Hunt
+  reddit: Reddit
+  adwords: Google
+  google: Google
+  bing: Bing
+  ddg: DuckDuckGo
+  chatgpt: ChatGPT
+  substack: Substack
+  newsletter: Newsletter
+  email: Email
+
+# Categories for the alias targets that NO referrer host produces, so the label -> category map
+# built from `exact_hosts` and `signatures` cannot supply them. Every key here MUST be an alias
+# target and every alias target MUST end up with a category; the loader checks both directions,
+# so a dead entry here is as loud as a missing one.
+alias_categories:
+  Newsletter: email
+  Email: email
+
+# Ad click-id parameter NAME (never the value) → paid-source label. Presence alone is the signal.
+#
+# `medium` is the utm_medium the click implies ON READ when the tag carries none
+# (spec/metrics.md §6c). It is set on the four parameters that ONLY an ad click carries:
+# gclid, gbraid and wbraid are written by Google Ads auto-tagging and msclkid by Microsoft Ads
+# auto-tagging, and by nothing else. The last four have NO medium on purpose -- Meta, TikTok,
+# LinkedIn and X append their click id to ORGANIC outbound links too, so its presence is not
+# evidence of a paid click and a medium derived from it would report organic social traffic as
+# paid. The `label` still applies to all eight: it answers "which network's click id is on this
+# row", which is true either way.
+#
+# This ran at WRITE until it was deleted (reference audit F05): internal/ingest stamped
+# utm_medium = "(gclid)" into a stored LowCardinality column, which is a classification, and
+# RFC-0001 §4.1 puts classification on read so a stored row stays reclassifiable. It was also
+# unreachable on the shape it named -- Google auto-tagging sends `?gclid=` with no utm
+# parameters at all, so the `utm_source = google` half of the condition was never true on a real
+# ad click. Both are fixed by the table being read here: gbraid and wbraid are covered for the
+# first time, and every row already stored is reclassified by editing this file.
+paid_sources:
+  gclid:     { label: Google Ads,    medium: "(gclid)" }
+  gbraid:    { label: Google Ads,    medium: "(gclid)" }
+  wbraid:    { label: Google Ads,    medium: "(gclid)" }
+  msclkid:   { label: Microsoft Ads, medium: "(msclkid)" }
+  fbclid:    { label: Meta Ads }
+  ttclid:    { label: TikTok Ads }
+  li_fat_id: { label: LinkedIn Ads }
+  twclid:    { label: X Ads }

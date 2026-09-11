@@ -1,0 +1,70 @@
+c: C8
+title: the retry schedule is the backoff composed with Retry-After, and the ids never move
+implements: spec/sdk-conformance.md §4 C8
+notes: |
+  C8 says "observe 1 h of simulated time". That hour is not observable: mockd
+  measures a schedule in real monotonic microseconds (its doc.go names
+  since_start_us as the field C8 measures), and under a simulated clock every
+  retry lands within milliseconds of the last. These arms therefore run on the
+  REAL clock and observe the head of each schedule -- four attempts, ~15 s --
+  which is where the three arms differ from one another. See the report.
+
+  `down` is replaced by `hangup` throughout: mockd's doc.go, "What the
+  recording cannot express" -- a refused connection is never recorded, so the
+  arm that must show "no response and so no header" would have nothing to show.
+  Both are network errors under RFC-0001 §8.3 item 8, the only distinction the
+  contract draws.
+arms:
+  - name: no response, so no header -- the pure 1, 2, 4 backoff
+    mock: hangup
+    steps:
+      - run: [init prd_conform001, track x]
+      - await: {count: 4, timeout_ms: 30000}
+    assert:
+      - {check: statuses, value: hangup}
+      - check: schedule
+        expect_s: [1, 2, 4]
+        tolerance_pct: 20
+        slack_ms: 400
+        why: "the backoff alone, ±20 % jitter"
+      - {check: stable_ids, why: "every retry resends the same batch with the same ids (wire §6)"}
+
+  - name: 503 with Retry-After 2 -- the header wins the first step
+    mock: "503"
+    steps:
+      - run: [init prd_conform001, track x]
+      - await: {count: 4, timeout_ms: 30000}
+    assert:
+      - {check: statuses, value: "503"}
+      - check: schedule
+        expect_s: [2, 2, 4]
+        tolerance_pct: 20
+        slack_ms: 400
+        why: "the later of the two floors at every step"
+      - {check: stable_ids}
+
+  - name: 429 with Retry-After 2 -- same composition
+    mock: "429"
+    steps:
+      - run: [init prd_conform001, track x]
+      - await: {count: 4, timeout_ms: 30000}
+    assert:
+      - {check: statuses, value: "429"}
+      - {check: schedule, expect_s: [2, 2, 4], tolerance_pct: 20, slack_ms: 400}
+      - {check: stable_ids}
+
+  - name: the schedule is persisted -- a new process continues it
+    mock: hangup
+    steps:
+      - run: [init prd_conform001, track x]
+      - await: {count: 4, timeout_ms: 30000}
+      - restart: {}
+      - run: [init prd_conform001]
+      - await: {count: 5, timeout_ms: 30000}
+    assert:
+      - check: schedule
+        expect_s: [1, 2, 4, 8]
+        tolerance_pct: 20
+        slack_ms: 600
+        why: "the fifth attempt is 8 s after the fourth, across a process boundary -- not 1 s"
+      - {check: stable_ids}

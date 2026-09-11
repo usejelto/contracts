@@ -1,0 +1,25 @@
+c: C4
+title: one install, delayed 0-6 h, claimed on the 202 and never sent twice
+implements: spec/sdk-conformance.md §4 C4
+arms:
+  - name: seven simulated hours, then another launch
+    env: {JELTO_NOW: "1788134400000"}
+    steps:
+      - run: [init prd_conform001, sleep 25200000]
+      - restart: {env: {JELTO_NOW: "1788159600000"}}
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: event_names, counts: {install: 1}, why: "exactly one install event, and a further init sends no second"}
+      - check: event_field
+        request: 0
+        event: 1
+        field: props
+        absent: true
+        why: "no attribution payload -- the wire's install carries only iid av os osv arch"
+      - check: state_deadline
+        path: install_due_at
+        anchor: jelto_now
+        min: 0
+        max: 21600
+        why: "sent between 0 and 6 h after init"
+      - {check: state, path: install_claimed, value: "true", why: "state marks install_claimed"}

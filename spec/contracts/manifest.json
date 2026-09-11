@@ -1,0 +1,40 @@
+{
+  "name": "jelto-contracts",
+  "version": "0.1.0",
+  "files": {
+    "go.mod": "go.mod",
+    "go.sum": "go.sum",
+    "contracts.go": "contracts.go",
+    "install.py": "install.py",
+    "package.py": "package.py",
+    "Makefile": "Makefile",
+    "README.md": "README.md",
+    ".gitignore": ".gitignore",
+    ".github/workflows/ci.yml": ".github/workflows/ci.yml",
+    "tests/test_package.py": "tests/test_package.py",
+    "spec/contracts/manifest.json": "spec/contracts/manifest.json",
+    "spec/wire-v1.md": "spec/wire-v1.md",
+    "spec/wire-v1.schema.json": "spec/wire-v1.schema.json",
+    "spec/sdk-conformance.md": "spec/sdk-conformance.md",
+    "contracts_test.go": "contracts_test.go",
+    "release.py": "release.py",
+    "release.json": "release.json",
+    "RELEASING.md": "RELEASING.md",
+    ".github/workflows/release.yml": ".github/workflows/release.yml",
+    "tests/test_release.py": "tests/test_release.py",
+    "LICENSE": "LICENSE",
+    "CONTRIBUTING.md": "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md": "CODE_OF_CONDUCT.md",
+    "SECURITY.md": "SECURITY.md",
+    "SUPPORT.md": "SUPPORT.md",
+    ".github/PULL_REQUEST_TEMPLATE.md": ".github/PULL_REQUEST_TEMPLATE.md",
+    ".github/ISSUE_TEMPLATE/bug_report.yml": ".github/ISSUE_TEMPLATE/bug_report.yml",
+    ".github/ISSUE_TEMPLATE/feature_request.yml": ".github/ISSUE_TEMPLATE/feature_request.yml",
+    ".github/ISSUE_TEMPLATE/config.yml": ".github/ISSUE_TEMPLATE/config.yml"
+  },
+  "directories": [
+    "spec/conformance",
+    "spec/wirecheck",
+    "spec/signatures"
+  ]
+}

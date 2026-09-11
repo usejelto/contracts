@@ -1,0 +1,31 @@
+c: C20
+title: the onboarding helper is track, with a namespace and two prop rules
+implements: spec/sdk-conformance.md §4 C20
+notes: |
+  C20 says the helper's event is "byte-identical to what track(...) would
+  send". It cannot be byte-identical: spec/wire-v1.md §3 gives every event its
+  own `id` and its own `t`, so two calls a millisecond apart differ in two
+  fields by construction. The `events_congruent` check compares every OTHER
+  field and the whole props object between the helper's event and a `track`
+  of the same name and props, sent in the same batch. See the report.
+arms:
+  - name: three steps and the track they are sugar for
+    env: {JELTO_NOW: "1788134400000", JELTO_DEBUG: "1"}
+    steps:
+      - run:
+          - init prd_conform001
+          - onboarding permissions ok
+          - onboarding driver fail no_kext
+          - onboarding tour skip
+          - track onboarding:permissions {"status":"ok"}
+          - sleep 6000
+    assert:
+      - check: event_names
+        values: [heartbeat, "onboarding:permissions", "onboarding:driver", "onboarding:tour", "onboarding:permissions"]
+      - {check: event_prop, request: 0, event: 1, key: status, value: ok}
+      - {check: event_prop, request: 0, event: 1, key: reason, absent: true, why: "reason only on the second"}
+      - {check: event_prop, request: 0, event: 2, key: status, value: fail}
+      - {check: event_prop, request: 0, event: 2, key: reason, value: no_kext}
+      - {check: event_prop, request: 0, event: 3, key: status, value: skip}
+      - {check: event_prop, request: 0, event: 3, key: reason, absent: true}
+      - {check: events_congruent, request: 0, values: ["1", "4"], why: "identical to the track it is sugar for, but for id and t"}

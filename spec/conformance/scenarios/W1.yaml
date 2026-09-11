@@ -1,0 +1,31 @@
+c: W1
+title: every request validates against the wire schema
+implements: spec/sdk-conformance.md §4 W1
+notes: |
+  W1 says "every request in every scenario", so the runner applies it to every
+  arm of every file without being asked; this scenario is the one that goes
+  looking for the edges deliberately -- a full batch of 100, a heartbeat with
+  install properties, an install, the onboarding namespace, and a body pushed
+  toward the 64 KB ceiling.
+
+  W1's nil-UUID clause cannot be reached from here: a host that sends
+  `00000000-0000-0000-0000-000000000000` is a broken host, and a correct one
+  has no way to produce one on request. That the check would catch it is
+  proved by TestValidatorRejectsANilUUIDId in the runner's own tests, against a
+  hand-built body, which is the only honest place for it.
+arms:
+  - name: every reserved event and a full batch
+    env: {JELTO_NOW: "1788134400000"}
+    steps:
+      - run:
+          - init prd_conform001 mac
+          - 'setprops {"license":"trial","edition":"pro"}'
+          - onboarding permissions ok
+          - onboarding driver fail no_kext
+      - run: ["track e.custom_{i}:x {\"page\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"n\":1.5,\"ok\":true}"]
+        repeat: 250
+      - run: [sleep 25200000]
+    assert:
+      - {check: request_count, min: 3}
+      - {check: max_events_per_request, max: 100, why: "<= 100 events"}
+      - {check: event_names, counts: {install: 1, heartbeat: 2}}

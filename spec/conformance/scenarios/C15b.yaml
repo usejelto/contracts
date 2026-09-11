@@ -1,0 +1,29 @@
+c: C15b
+title: a pre-epoch clock and a clock past int64 are both sent as they are
+implements: spec/sdk-conformance.md §4 C15b
+notes: |
+  The second arm is the half no real platform clock can reach: a Swift
+  `Date` is a Double of seconds and a Go `time.Time` an int64 of nanoseconds,
+  so neither can produce a millisecond value outside int64 without the SDK
+  choosing to. refhost's clock is math/big precisely so this arm can exist.
+  See the runner's report on what that means for C15b.
+arms:
+  - name: 1969-07-20, a clock before the epoch
+    env: {JELTO_NOW: "-14256000000"}
+    steps:
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: request_count, equal: 1}
+      - {check: t_literal, request: 0, event: 0, value: "-14256000000", why: "neither corrected nor dropped nor held back"}
+
+  - name: a clock so far ahead that t exceeds int64
+    env: {JELTO_NOW: "99999999999999999999"}
+    steps:
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: request_count, equal: 1}
+      - check: t_literal
+        request: 0
+        event: 0
+        value: "99999999999999999999"
+        why: "saturating into int64 would be the correction §8.5 forbids"

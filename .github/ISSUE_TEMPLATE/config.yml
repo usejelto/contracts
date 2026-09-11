@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Private security report
+    url: https://github.com/usejelto/contracts/security/policy
+    about: Email taha@jelto.io privately for vulnerabilities; read the security policy first.
+  - name: Documentation and support
+    url: https://github.com/usejelto/contracts/blob/main/SUPPORT.md
+    about: Find setup guidance, public questions, and private account support.

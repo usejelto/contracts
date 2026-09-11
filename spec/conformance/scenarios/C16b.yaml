@@ -1,0 +1,15 @@
+c: C16b
+title: a stop scoped to web is ignored by an app SDK
+implements: spec/sdk-conformance.md §4 C16b
+arms:
+  - name: stop scope web
+    env: {JELTO_NOW: "1788134400000", JELTO_DEBUG: "1"}
+    mock: "stop:60:web"
+    mock_clock_from_now: true
+    steps:
+      - run: [init prd_conform001, sleep 3000]
+      - run: [track y, sleep 6000]
+    assert:
+      - {check: request_count, equal: 2, why: "the app SDK kept sending inside a web-scoped stop"}
+      - {check: event_names, values: [heartbeat, y]}
+      - {check: stderr, contains: ["ignoring a stop scoped to web"]}

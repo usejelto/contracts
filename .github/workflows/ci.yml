@@ -1,0 +1,81 @@
+# Portable workflow: this component directory must be the repository root.
+name: contracts checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      conformance:
+        description: Run full conformance using the checked-in contracts pin
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      release:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: component-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CI: 'true'
+  GOFLAGS: -mod=readonly
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+
+jobs:
+  checks:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Component tests and packages
+        run: make test build package
+      - name: Conformance twice
+        run: make conformance-twice
+
+      - name: Prepare release artifacts
+        if: inputs.release
+        run: |
+          python3 release.py stage
+          python3 release.py smoke
+      - uses: actions/upload-artifact@v7
+        if: inputs.release
+        with:
+          name: release-${{ runner.os }}
+          path: release-artifacts/
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v7
+        if: ${{ !inputs.release }}
+        with:
+          name: packages-${{ runner.os }}
+          path: |
+            artifacts/
+            dist/*.zip
+            dist/*.sha256
+            *.tgz
+          if-no-files-found: error
+          retention-days: 14

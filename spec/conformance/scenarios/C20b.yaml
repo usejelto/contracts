@@ -1,0 +1,15 @@
+c: C20b
+title: a step outside the namespace and a free-text reason are dropped client-side
+implements: spec/sdk-conformance.md §4 C20b
+arms:
+  - name: a bad step and a bad reason
+    env: {JELTO_NOW: "1788134400000", JELTO_DEBUG: "1"}
+    steps:
+      - run:
+          - init prd_conform001
+          - onboarding "Bad Step!" ok
+          - onboarding x ok "Free text reason"
+          - sleep 6000
+    assert:
+      - {check: event_names, values: [heartbeat], why: "both dropped client-side"}
+      - {check: stderr, contains: ["^[a-z0-9_-]{1,32}$", "^[a-z0-9_.-]+$"], why: "a debug log naming the rule"}

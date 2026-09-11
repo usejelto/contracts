@@ -1,0 +1,19 @@
+c: C1
+title: init returns at once, and a thousand tracks do not stop the process exiting
+implements: spec/sdk-conformance.md §4 C1
+notes: |
+  §4 writes `init k`. `k` is not a product key: spec/wire-v1.md §2 requires
+  `p` to match ^prd_[a-z0-9]{10}$, and W1 validates every request in every
+  scenario against the schema that states it. A host sending `k` verbatim
+  fails W1 on its first request, so every scenario here uses a well-formed
+  key. See the runner's report.
+arms:
+  - name: a thousand tracks, then exit
+    steps:
+      - run: [init prd_conform001]
+      - run: [track x]
+        repeat: 1000
+    assert:
+      - {check: host_reply, key: init, field: us, max: 5000, why: "init returns in < 5 ms"}
+      - {check: exit_within_ms, max: 1000, why: "the process exits within 1 s"}
+      - {check: exit_code, equal: 0, why: "no crash"}

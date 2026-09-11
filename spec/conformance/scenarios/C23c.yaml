@@ -1,0 +1,20 @@
+c: C23c
+title: existing claimed legacy installs establish a baseline without an update
+implements: spec/sdk-conformance.md §7
+arms:
+  - name: remove only version state, kill, migrate and relaunch unchanged
+    env: {JELTO_NOW: "1788134400000", JELTO_APP_VERSION: "legacy"}
+    steps:
+      - run: [init prd_conform001, sleep 25200000, installid, 'setprops {"license":"paid"}', sleep 3000, legacyversion]
+      - kill_host: true
+      - restart: {env: {JELTO_NOW: "1788159600000", JELTO_APP_VERSION: "current"}}
+      - run: [init prd_conform001, sleep 3000, installid]
+      - restart: {env: {JELTO_APP_VERSION: "current"}}
+      - run: [init prd_conform001, sleep 3000, installid]
+    assert:
+      - {check: event_names, counts: {install: 1, app_updated: 0}}
+      - {check: app_updates, values: []}
+      - {check: host_reply_stable, key: installid}
+      - {check: state, path: last_app_version, value: '"current"'}
+      - {check: state, path: install_claimed, value: "true"}
+      - {check: state, path: install_props, value: '{"license":"paid"}'}

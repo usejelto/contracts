@@ -1,0 +1,25 @@
+c: C23d
+title: offline transitions and abrupt restarts preserve IDs and immutable metadata
+implements: spec/sdk-conformance.md §7
+arms:
+  - name: two queued transitions retry after crashes and a later app version
+    env: {JELTO_NOW: "1788134400000", JELTO_APP_VERSION: "A", JELTO_CLIENT_VERSION: "refhost/1"}
+    steps:
+      - run: [init prd_conform001 desktop, sleep 25200000]
+      - mock: "503:"
+      - restart: {env: {JELTO_NOW: "1788159600000", JELTO_APP_VERSION: "B"}}
+      - run: [init prd_conform001 desktop, sleep 3000]
+      - kill_host: true
+      - restart: {env: {JELTO_NOW: "1788159610000", JELTO_APP_VERSION: "C", JELTO_CLIENT_VERSION: "refhost/2"}}
+      - run: [init prd_conform001 desktop, sleep 3000]
+      - kill_host: true
+      - mock: ok
+      - restart: {env: {JELTO_NOW: "1788159700000"}}
+      - run: [init prd_conform001 desktop, sleep 3000]
+      - restart: {env: {JELTO_NOW: "1788159800000"}}
+      - run: [init prd_conform001 desktop, sleep 3000]
+    assert:
+      - {check: event_names, counts: {install: 1, heartbeat: 1}}
+      - {check: app_updates, values: ["A=>B", "B=>C"]}
+      - {check: state, path: last_app_version, value: '"C"'}
+      - {check: queue, absent: true}

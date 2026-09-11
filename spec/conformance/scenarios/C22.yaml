@@ -1,0 +1,37 @@
+c: C22
+title: install properties are persisted, resolved at send, and a change sends a heartbeat at once
+implements: spec/sdk-conformance.md §4 C22
+notes: |
+  C22's last clause -- "the next-process heartbeat still carries both
+  (persisted)" -- needs a UTC day to have turned. RFC-0001 §8.2 item 3 sends a
+  heartbeat only when `last_heartbeat_day != today`, and C3 asserts in as many
+  words that "a third init on the same day sends none". A new process on the
+  same day therefore sends no heartbeat at all and there is nothing for the
+  clause to be true of. Arm B rolls the day. See the report.
+arms:
+  - name: trial, then paid + pro, on the real clock
+    steps:
+      - run: [init prd_conform001, 'setprops {"license":"trial"}']
+      - run: [sleep 3000]
+      - run: ['setprops {"license":"paid","edition":"pro"}']
+      - run: [sleep 3000]
+    assert:
+      - {check: event_prop, request: 0, event: 0, key: license, value: trial, why: "first heartbeat has license = trial"}
+      - check: request_after_step
+        request: 1
+        step: 2
+        seconds: 0
+        slack_ms: 2000
+        why: "the second setprops triggers an immediate heartbeat (<= 2 s)"
+      - {check: event_prop, request: 1, event: 0, key: license, value: paid}
+      - {check: event_prop, request: 1, event: 0, key: edition, value: pro}
+
+  - name: a new process on a new day still carries both
+    env: {JELTO_NOW: "1788134400000"}
+    steps:
+      - run: [init prd_conform001, 'setprops {"license":"paid","edition":"pro"}', sleep 3000]
+      - restart: {env: {JELTO_NOW: "1788220800000"}}
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: event_prop, request: -1, event: 0, key: license, value: paid, why: "persisted"}
+      - {check: event_prop, request: -1, event: 0, key: edition, value: pro}

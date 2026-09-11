@@ -1,0 +1,15 @@
+c: C9
+title: a 400 is final -- the batch is dropped and the next one is fresh
+implements: spec/sdk-conformance.md §4 C9
+arms:
+  - name: 400 then ok
+    env: {JELTO_NOW: "1788134400000"}
+    mock: "400"
+    steps:
+      - run: [init prd_conform001, track x, sleep 5000]
+      - mock: ok
+      - run: [track y, sleep 6000]
+    assert:
+      - {check: request_count, equal: 2, why: "exactly one request with x (no retry)"}
+      - {check: statuses, values: ["400", "202"]}
+      - {check: event_names, values: [heartbeat, x, y], why: "y is sent in a fresh batch"}

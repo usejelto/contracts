@@ -1,0 +1,288 @@
+# spec/signatures/bots.yaml — automated-client classification, applied ON READ.
+# Status: v0.8 · Gates: M1 · Seeded from EQBase's stats-worker (2026-08), which classified live
+# traffic for four months. To name a new bot: read the user agents on the Ops card's Bots row
+# (`sample_uas`, up to five per row — the account API caps it), add ONE line.
+#
+# Upstream: none. This table is HAND-CURATED and has no generator. Its reference — what a new
+#           needle is checked against, not imported from — is matomo-org/device-detector's bot
+#           regexes as shipped in Plausible's ua_inspector release 6.5.0
+#           (priv/ua_inspector/bot.bots.yml, 807 regexes).
+# Pinned:   device-detector via ua_inspector 6.5.0 · last checked against it 2026-08-30.
+# Refresh:  make signatures  (prints this pin and regenerates nothing here). Importing 807
+#           regexes is the move this file exists to refuse: the Ops card is actionable only
+#           because every row carries an operator a customer recognises, and it is read on a
+#           column whose rows cannot be reclassified backwards if the import is wrong. Add ONE
+#           line, for a user agent someone has actually seen.
+#
+# Matching: lower-case substring of the user agent; FIRST MATCH WINS, so a specific token
+# (chatgpt-user) must precede a broader one it contains (chatgpt). The engine emits `needles`
+# in file order into multiSearchFirstIndex(); index 0 = no match = human (subject to §rules).
+# multiMatchAnyIndex() MUST NOT be used: it returns an unspecified matching index, not the first.
+# Ceiling: 256 needles per array (signatures + generic_tokens). The loader refuses to start above
+# it; past 256, chunk in file order and cascade — spec/metrics.md §6.
+# Both properties are verified on ClickHouse 24.8.14, not documented (the docs say leftmost match
+# in the haystack). Re-test on upgrade; a change renames an operator, it does not move a count.
+# Lower case: needles are compared against lower(ua) VERBATIM — nothing lower-cases this file —
+# so a needle with a capital letter matches nothing, forever, and says nothing. The loader
+# refuses to start on one, the same as the ceiling. Write every needle in lower case.
+#
+# AI coverage checked 2026-09-05 against datafa.st/crawlers and @datafast/ai-crawl 1.0.9;
+# current Google, Mistral, Amazon, Kimi, Apple and Cohere documentation governs purpose.
+# Accepted purposes and source evidence: spec/fixtures/crawlers/expected.md
+# under Named crawler classification; spec/advanced-features.md §4 owns the policy.
+# These are claimed UA identities, not verified operators or proof of downstream content use.
+# Keep known AI crawlers with unsupported purposes as `ai_other`, and other clients as
+# `other`. Do not add bare Grok (also matches ngrok), Copilot
+# (also names browser/app products), or broad provider aliases such as gemini, kimi or xai.
+#
+# AI visibility categories used by the Bots card: ai_answers · indexing · training · ai_other.
+# ai_other names an AI crawler without claiming its requests serve a specific purpose.
+# Other automated clients retain their operational categories below; they are
+# still excluded from human metrics, but the AI visibility card does not mix
+# monitoring, SEO tooling, link unfurlers, and generic scripts into its totals.
+
+rules:
+  empty_ua: { operator: "Empty user agent", category: other }
+  # A package manager installs for a real person: NOT a bot. Checked as a UA PREFIX before the
+  # table (Homebrew's UA ends in "curl/8.x" and would otherwise match the curl line).
+  installers:
+    - { prefix: "homebrew/", label: Homebrew }
+    - { prefix: "winget-cli/", label: winget }
+  # Applied after the table: a generic bot token wins even inside a browser-looking UA.
+  generic_tokens: [bot, crawler, spider, crawl, slurp, scanner, fetcher, http-client, httpclient]
+  generic: { operator: "Other bot/crawler", category: other }
+  # A UA that matched nothing and does not look like a browser is an unidentified client.
+  browser_markers:
+    all_of: ["mozilla/"]
+    any_of: [safari, gecko, chrome, applewebkit, firefox]
+  unidentified: { operator: "Unidentified automated client", category: other }
+
+signatures:
+  # Search-engine crawlers
+  - { needle: storebot-google,        operator: Google,            category: indexing }
+  - { needle: google-inspectiontool,  operator: Google,            category: indexing }
+  - { needle: adsbot-google,          operator: Google,            category: indexing }
+  - { needle: mediapartners-google,   operator: Google,            category: indexing }
+  - { needle: apis-google,            operator: Google,            category: indexing }
+  - { needle: feedfetcher-google,     operator: Google,            category: indexing }
+  # User-triggered text-to-speech is neither search indexing nor an AI-answer request.
+  - { needle: google-read-aloud,      operator: Google,            category: other }
+  # Browser-shaped: these carry a real Chrome/Safari token, so browser_markers waves them
+  # through and the human filter counts them as visitors until a needle names them (F27).
+  - { needle: google favicon,         operator: Google,            category: indexing }
+  - { needle: google web preview,     operator: Google,            category: indexing }
+  # GoogleOther spans product/R&D crawling; the request does not establish its purpose.
+  - { needle: googleother,            operator: Google,            category: other }
+  # Extended tokens are robots.txt reuse controls, not separate HTTP crawlers. Retain only
+  # literal claimed-UA detection; never infer a training visit from either control.
+  - { needle: google-extended,        operator: Google,            category: other }
+  - { needle: googlebot,              operator: Google,            category: indexing }
+  - { needle: bingpreview,            operator: Bing,              category: indexing }
+  - { needle: adidxbot,               operator: Bing,              category: indexing }
+  - { needle: msnbot,                 operator: Bing,              category: indexing }
+  - { needle: bingbot,                operator: Bing,              category: indexing }
+  - { needle: applebot-extended,      operator: Apple,             category: other }
+  - { needle: applebot,               operator: Apple,             category: indexing }
+  - { needle: duckassistbot,          operator: DuckDuckGo,        category: ai_answers }
+  - { needle: duckduckbot,            operator: DuckDuckGo,        category: indexing }
+  - { needle: duckduckgo-favicons-bot, operator: DuckDuckGo,       category: indexing }
+  - { needle: yandexbot,              operator: Yandex,            category: indexing }
+  - { needle: yandeximages,           operator: Yandex,            category: indexing }
+  - { needle: yandexvideo,            operator: Yandex,            category: indexing }
+  - { needle: yandexmedia,            operator: Yandex,            category: indexing }
+  - { needle: yandexmetrika,          operator: Yandex,            category: indexing }
+  - { needle: yandexdirect,           operator: Yandex,            category: indexing }
+  - { needle: yandexfavicons,         operator: Yandex,            category: indexing }
+  - { needle: yadirectfetcher,        operator: Yandex,            category: indexing }
+  - { needle: baiduspider,            operator: Baidu,             category: indexing }
+  - { needle: sogou web spider,       operator: Sogou,             category: indexing }
+  - { needle: sogou inst spider,      operator: Sogou,             category: indexing }
+  - { needle: sogou pic spider,       operator: Sogou,             category: indexing }
+  - { needle: sogou head spider,      operator: Sogou,             category: indexing }
+  - { needle: new-sogou-spider,       operator: Sogou,             category: indexing }
+  - { needle: petalbot,               operator: Huawei Petal,      category: indexing }
+  - { needle: seznambot,              operator: Seznam,            category: indexing }
+  - { needle: coccocbot,              operator: Coc Coc,           category: indexing }
+  - { needle: mojeekbot,              operator: Mojeek,            category: indexing }
+  - { needle: yisou,                  operator: Yisou,             category: indexing }
+  # AI crawlers / assistants
+  # Official current fetchers, plus explicit older/spelling variants listed by DataFast.
+  - { needle: google-gemininotebook,  operator: Google,            category: ai_answers }
+  - { needle: google-notebooklm,      operator: Google,            category: ai_answers }
+  - { needle: google-agent,           operator: Google,            category: ai_answers }
+  - { needle: googleagent,            operator: Google,            category: ai_answers }
+  # CloudVertexBot crawls at site owners' request; that does not establish model training.
+  - { needle: google-cloudvertexbot,  operator: Google,            category: other }
+  - { needle: chatgpt-user,           operator: ChatGPT,           category: ai_answers }
+  - { needle: oai-searchbot,          operator: OpenAI,            category: indexing }
+  - { needle: oai-adsbot,             operator: OpenAI,            category: other }
+  - { needle: gptbot,                 operator: OpenAI,            category: training }
+  - { needle: chatgpt,                operator: ChatGPT,           category: ai_answers }
+  - { needle: claude-searchbot,       operator: Anthropic,         category: indexing }
+  - { needle: claude-user,            operator: Claude,            category: ai_answers }
+  - { needle: claude-web,             operator: Claude,            category: ai_answers }
+  - { needle: claudebot,              operator: Anthropic,         category: training }
+  - { needle: anthropic-ai,           operator: Anthropic,         category: training }
+  - { needle: perplexitybot,          operator: Perplexity,        category: indexing }
+  - { needle: perplexity-user,        operator: Perplexity,        category: ai_answers }
+  - { needle: ccbot,                  operator: Common Crawl,      category: training }
+  - { needle: amazonbot,              operator: Amazon,            category: training }
+  - { needle: amzn-searchbot,         operator: Amazon,            category: indexing }
+  - { needle: amzn-user,              operator: Amazon,            category: ai_answers }
+  - { needle: mistralai-user,         operator: Mistral,           category: ai_answers }
+  - { needle: mistralai-index,        operator: Mistral,           category: indexing }
+  - { needle: mistralai-training,     operator: Mistral,           category: training }
+  - { needle: kimi-user,              operator: Moonshot AI,       category: ai_answers }
+  - { needle: kimi-searchbot,         operator: Moonshot AI,       category: indexing }
+  - { needle: kimibot,                operator: Moonshot AI,       category: training }
+  # Named in DataFast, with no primary documentation establishing a specific intent.
+  - { needle: xai-searchbot,          operator: xAI,               category: ai_other }
+  - { needle: grok-deepsearch,        operator: xAI,               category: ai_other }
+  - { needle: grokbot,                operator: xAI,               category: ai_other }
+  - { needle: xai-bot,                operator: xAI,               category: ai_other }
+  - { needle: xai-grok,               operator: xAI,               category: ai_other }
+  - { needle: xai-web-crawler,        operator: xAI,               category: ai_other }
+  - { needle: bytespider,             operator: ByteDance,         category: training }
+  - { needle: doubaobot,              operator: ByteDance,         category: ai_other }
+  - { needle: tiktokspider,           operator: ByteDance,         category: other }
+  - { needle: erniebot,               operator: Baidu,             category: ai_other }
+  - { needle: yiyanbot,               operator: Baidu,             category: ai_other }
+  - { needle: qwen-user,              operator: Alibaba,           category: ai_other }
+  - { needle: qwenbot,                operator: Alibaba,           category: ai_other }
+  - { needle: tongyibot,              operator: Alibaba,           category: ai_other }
+  - { needle: aliyunbot,              operator: Alibaba,           category: other }
+  - { needle: chatglm-spider,         operator: Zhipu AI,          category: ai_other }
+  - { needle: deepseekbot,            operator: DeepSeek,          category: ai_other }
+  - { needle: meta-externalagent,     operator: Meta,              category: training }
+  - { needle: meta-externalfetcher,   operator: Meta,              category: ai_answers }
+  - { needle: meta-webindexer,        operator: Meta,              category: ai_other }
+  - { needle: meta-externalads,       operator: Meta,              category: other }
+  - { needle: facebookbot,            operator: Meta,              category: other }
+  # Cohere's current crawler policy does not identify an active training crawler.
+  - { needle: cohere-training-data-crawler, operator: Cohere,      category: ai_other }
+  - { needle: cohere-ai,              operator: Cohere,            category: ai_other }
+  - { needle: diffbot,                operator: Diffbot,           category: training }
+  - { needle: youbot,                 operator: You.com,           category: indexing }
+  - { needle: imagesiftbot,           operator: ImageSift,         category: training }
+  - { needle: omgili,                 operator: Webz.io,           category: training }
+  - { needle: timpibot,               operator: Timpi,             category: training }
+  - { needle: ai2bot,                 operator: Allen Institute,   category: training }
+  # SEO / marketing crawlers
+  - { needle: ahrefssiteaudit,        operator: Ahrefs,            category: seo }
+  - { needle: ahrefsbot,              operator: Ahrefs,            category: seo }
+  - { needle: semrushbot,             operator: Semrush,           category: seo }
+  - { needle: dotbot,                 operator: Moz,               category: seo }
+  - { needle: rogerbot,               operator: Moz,               category: seo }
+  - { needle: mj12bot,                operator: Majestic,          category: seo }
+  - { needle: blexbot,                operator: WebMeUp,           category: seo }
+  - { needle: dataforseobot,          operator: DataForSEO,        category: seo }
+  - { needle: serpstatbot,            operator: Serpstat,          category: seo }
+  - { needle: barkrowler,             operator: Babbar,            category: seo }
+  - { needle: "screaming frog",       operator: Screaming Frog,    category: seo }
+  - { needle: seokicks,               operator: SEOkicks,          category: seo }
+  - { needle: linkdexbot,             operator: Linkdex,           category: seo }
+  - { needle: awariobot,              operator: Awario,            category: seo }
+  # Social / link unfurlers — these are what inflate download counts when a link is shared
+  - { needle: facebookexternalhit,    operator: Meta,              category: social }
+  - { needle: facebookcatalog,        operator: Meta,              category: social }
+  - { needle: twitterbot,             operator: X (Twitter),       category: social }
+  - { needle: slack-imgproxy,         operator: Slack,             category: social }
+  - { needle: slackbot,               operator: Slack,             category: social }
+  - { needle: discordbot,             operator: Discord,           category: social }
+  - { needle: telegrambot,            operator: Telegram,          category: social }
+  - { needle: whatsapp,               operator: WhatsApp,          category: social }
+  - { needle: linkedinbot,            operator: LinkedIn,          category: social }
+  - { needle: redditbot,              operator: Reddit,            category: social }
+  - { needle: pinterestbot,            operator: Pinterest,           category: social }
+  - { needle: pinterest/0.,            operator: Pinterest,           category: social }
+  - { needle: embedly,                operator: Embedly,           category: social }
+  - { needle: skypeuripreview,        operator: Skype,             category: social }
+  - { needle: vkshare,                operator: VK,                category: social }
+  - { needle: mastodon,               operator: Mastodon,          category: social }
+  - { needle: notion,                 operator: Notion,            category: social }
+  # Uptime / monitoring
+  - { needle: uptimerobot,            operator: UptimeRobot,       category: monitoring }
+  - { needle: pingdom,                operator: Pingdom,           category: monitoring }
+  - { needle: statuscake,             operator: StatusCake,        category: monitoring }
+  - { needle: betteruptime,           operator: Better Stack,      category: monitoring }
+  - { needle: "better uptime",        operator: Better Stack,      category: monitoring }
+  - { needle: site24x7,               operator: Site24x7,          category: monitoring }
+  - { needle: datadog,                operator: Datadog,           category: monitoring }
+  - { needle: hetrixtools,            operator: HetrixTools,       category: monitoring }
+  - { needle: nodeping,               operator: NodePing,          category: monitoring }
+  - { needle: uptime-kuma,            operator: Uptime Kuma,       category: monitoring }
+  - { needle: newrelicpinger,         operator: New Relic,         category: monitoring }
+  - { needle: gtmetrix,               operator: GTmetrix,          category: monitoring }
+  - { needle: freshping,              operator: Freshping,         category: monitoring }
+  - { needle: cron-job.org,           operator: cron-job.org,      category: monitoring }
+  # Security / research scanners
+  - { needle: censysinspect,          operator: Censys,            category: security }
+  - { needle: censys,                 operator: Censys,            category: security }
+  - { needle: expanse,                operator: Palo Alto (Expanse), category: security }
+  - { needle: internetmeasurement,    operator: Internet Measurement, category: security }
+  - { needle: shodan,                 operator: Shodan,            category: security }
+  - { needle: netsystemsresearch,     operator: NetSystems Research, category: security }
+  - { needle: paloaltonetworks,       operator: Palo Alto,         category: security }
+  - { needle: projectdiscovery,       operator: ProjectDiscovery,  category: security }
+  - { needle: nuclei,                 operator: ProjectDiscovery,  category: security }
+  - { needle: zgrab,                  operator: ZGrab scanner,     category: security }
+  - { needle: masscan,                operator: masscan,           category: security }
+  - { needle: l9explore,              operator: LeakIX,            category: security }
+  - { needle: leakix,                 operator: LeakIX,            category: security }
+  # Archives
+  - { needle: archive.org_bot,        operator: Internet Archive,  category: archive }
+  - { needle: ia_archiver,            operator: Internet Archive,  category: archive }
+  - { needle: wayback,                operator: Internet Archive,  category: archive }
+  - { needle: heritrix,               operator: Internet Archive,  category: archive }
+  - { needle: webrecorder,            operator: Webrecorder,       category: archive }
+  # Generic HTTP tooling
+  - { needle: "curl/",                operator: curl,              category: tool }
+  - { needle: "wget/",                operator: wget,              category: tool }
+  - { needle: python-requests,        operator: Python script,     category: tool }
+  - { needle: python-urllib,          operator: Python script,     category: tool }
+  - { needle: aiohttp,                operator: Python script,     category: tool }
+  - { needle: httpx,                  operator: Python script,     category: tool }
+  - { needle: "python/",              operator: Python script,     category: tool }
+  - { needle: go-http-client,         operator: Go script,         category: tool }
+  - { needle: okhttp,                 operator: okhttp,            category: tool }
+  - { needle: apache-httpclient,      operator: Java script,       category: tool }
+  - { needle: "java/",                operator: Java script,       category: tool }
+  - { needle: axios,                  operator: axios,             category: tool }
+  - { needle: node-fetch,             operator: Node script,       category: tool }
+  - { needle: undici,                 operator: Node script,       category: tool }
+  - { needle: libwww-perl,            operator: Perl script,       category: tool }
+  - { needle: guzzlehttp,             operator: PHP script,        category: tool }
+  - { needle: "php/",                 operator: PHP script,        category: tool }
+  - { needle: httpie,                 operator: HTTPie,            category: tool }
+  - { needle: postmanruntime,         operator: Postman,           category: tool }
+  - { needle: insomnia,               operator: Insomnia,          category: tool }
+  - { needle: "deno/",                operator: Deno script,       category: tool }
+  - { needle: "bun/",                 operator: Bun script,        category: tool }
+  - { needle: headlesschrome,         operator: Headless Chrome,   category: tool }
+  # Browser-shaped too, and just as automated: a Lighthouse or PageSpeed run drives a real
+  # Chrome, and Chrome's prefetch proxy fetches a page nobody has asked for yet. DeviceDetector
+  # is the reference for all three ('[A-z0-9]*-Lighthouse', 'Google PageSpeed Insights',
+  # 'Chrome Privacy Preserving Prefetch Proxy'); we name them here and classify on read.
+  - { needle: -lighthouse,            operator: Lighthouse,        category: tool }
+  - { needle: pagespeed,              operator: Google PageSpeed,  category: tool }
+  - { needle: page speed insights,    operator: Google PageSpeed,  category: tool }
+  - { needle: privacy preserving prefetch proxy, operator: Chrome prefetch proxy, category: tool }
+  - { needle: phantomjs,              operator: PhantomJS,         category: tool }
+  - { needle: playwright,             operator: Playwright,        category: tool }
+  - { needle: puppeteer,              operator: Puppeteer,         category: tool }
+  - { needle: scrapy,                 operator: Scrapy,            category: tool }
+
+category_labels:
+  ai_answers: AI answers
+  indexing: Indexing
+  training: Training
+  ai_other: Other AI
+  search: Search engine
+  ai: AI
+  seo: SEO / marketing
+  social: Social / preview
+  monitoring: Monitoring / uptime
+  security: Security / scanning
+  archive: Archive
+  tool: Tool / script
+  other: Other

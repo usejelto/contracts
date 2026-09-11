@@ -1,0 +1,24 @@
+c: C23e
+title: reset and disable discard version transitions and restart their baselines
+implements: spec/sdk-conformance.md §7
+arms:
+  - name: reset discards an unsent update and next launch remains baseline
+    env: {JELTO_NOW: "1788134400000", JELTO_APP_VERSION: "A"}
+    steps:
+      - run: [init prd_conform001, sleep 25200000]
+      - restart: {env: {JELTO_NOW: "1788159600000", JELTO_APP_VERSION: "B"}}
+      - run: [init prd_conform001, reset, sleep 3000]
+      - restart: {env: {JELTO_APP_VERSION: "B"}}
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: app_updates, values: []}
+      - {check: state, path: last_app_version, value: '"B"'}
+  - name: disable drops an unsent transition and explicit init starts a new baseline
+    env: {JELTO_NOW: "1788134400000", JELTO_APP_VERSION: "A"}
+    steps:
+      - run: [init prd_conform001, sleep 25200000]
+      - restart: {env: {JELTO_NOW: "1788159600000", JELTO_APP_VERSION: "B"}}
+      - run: [init prd_conform001, disable, init prd_conform001, sleep 3000]
+    assert:
+      - {check: app_updates, values: []}
+      - {check: state, path: last_app_version, value: '"B"'}

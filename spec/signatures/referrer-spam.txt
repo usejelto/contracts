@@ -1,0 +1,35 @@
+# spec/signatures/referrer-spam.txt — referrer hostnames rejected at ingest (reason: spam_referrer).
+# Status: v0.6 · Gates: M1 · One hostname per line, lower case; subdomains match. Lines starting
+# with # are comments. Keep this file boring: a real site wrongly listed here loses data.
+#
+# Upstream: matomo-org/referrer-spam-list · spammers.txt (public domain) — the same upstream as
+#           the read table, hand-reduced to the hosts worth a rejection.
+# Pinned:   seeded 2026-08-27 from that list; HAND-CURATED thereafter and never regenerated —
+#           the upstream's thousands of judgements are applied on read, not here.
+# Refresh:  make signatures  (prints this pin; it rewrites referrer-spam-read.txt only. A host
+#           is added here one at a time, by a person, after reading it.)
+#
+# WRITE SIDE, and the only signature file on one: a host here makes ingest DELETE the event
+# (spec/wire-v1.md §6). That is why it is short. The large generated list is
+# spec/signatures/referrer-spam-read.txt, applied on read where a mistake costs a label rather
+# than a row (spec/metrics.md §6b); the loader unions this file into it, so every host here is
+# also labelled on read for the rows that were stored before it was added.
+semalt.com
+buttons-for-website.com
+darodar.com
+econom.co
+ilovevitaly.com
+free-share-buttons.com
+site-audit.top
+best-seo-offer.com
+seo-platform.net
+trafficmonetizer.org
+event-tracking.com
+4webmasters.org
+social-buttons.com
+sharebutton.to
+floating-share-buttons.com
+100dollars-seo.com
+success-seo.com
+free-social-buttons.com
+video--production.com

@@ -1,0 +1,17 @@
+c: C17
+title: JELTO_DEBUG=1 prints the exact body before it is sent
+implements: spec/sdk-conformance.md §4 C17
+arms:
+  - name: debug on
+    env: {JELTO_NOW: "1788134400000", JELTO_DEBUG: "1"}
+    steps:
+      - run: [init prd_conform001, track x, sleep 6000]
+    assert:
+      - {check: request_count, equal: 1}
+      - check: stderr_contains_body
+        request: 0
+        why: >-
+          the bytes mockd received appear verbatim on stderr. Comparing the two
+          channels is the only form of this assertion that cannot be satisfied
+          by a host that pretty-prints what it is about to send and then sends
+          something else.

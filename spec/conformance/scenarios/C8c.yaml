@@ -1,0 +1,115 @@
+c: C8c
+title: the four edges of Retry-After -- clamped, absent, unparseable, and too late to matter
+implements: spec/sdk-conformance.md §4 C8c
+notes: |
+  Two of C8c's four edges cannot be watched elapse. `429:9999` clamped to
+  3 600 s is a claim about a wait an hour long, and "the tenth consecutive
+  refusal" is 511 s into a schedule even before the step is measured. Both are
+  claims about a wait the SDK has SCHEDULED, and §1's FOURTH surface -- the
+  state the host exports -- exists for exactly that: arm A reads the deadline
+  the SDK persisted and arm D reads the step it reached. Arm D runs on a
+  simulated clock, where ten refusals cost ten `sleep` commands and no real
+  time at all -- which is the only frame in which C8's "1 h of simulated time"
+  means anything.
+
+  The two field names this scenario reads, `backoff_step_ms` and
+  `backoff_next_at`, are §3.2's and not any implementation's: the host EXPORTS
+  them for `dumpstate` and the runner never opens a file. §3.2 derives both
+  from RFC-0001 §8.3 item 8 -- the step is what a new process must not restart
+  at 1 s, and a step does not say *when*, which is why the deadline is a fact
+  of its own. An SDK storing either in a plist or in SQLite passes these rows.
+
+  Arm D opens with SEVEN simulated hours under `ok` before the refusal script
+  goes in, and that is load-bearing rather than scene-setting. RFC-0001 §8.2
+  item 4 delays the `install` by a random 0-6 h, so an arm that advances any
+  span shorter than 6 h has the install land inside it on some runs and not
+  others -- the batch under retry then carries two events or three depending on
+  a coin toss. Seven hours is longer than the longest delay the rule allows, so
+  the install is ALWAYS delivered and claimed in the first request, and the ten
+  refusals that follow always carry exactly one event. This is determinism won
+  from the contract rather than from a seed: it needs no knob the conformance
+  host does not already have, so it holds for an SDK host as much as for
+  refhost. Earlier this arm advanced 6 000 000 ms with the install unclaimed
+  and flaked on 27.8 % of runs (6 000 000 / 21 600 000) -- measured at 2/10
+  here and 4/6 on the coordinator's machine, with perfect separation on
+  whether the delay fell inside the span.
+arms:
+  - name: 9999 is honoured but clamped to 3600 s
+    mock: "429:9999"
+    env: {JELTO_DEBUG: "1"}
+    steps:
+      - run: [init prd_conform001, track x]
+      - await: {count: 1, timeout_ms: 20000}
+      - wait_ms: 3000
+    assert:
+      - {check: request_count, equal: 1, why: "no retry inside the clamped wait"}
+      - check: state_deadline
+        path: backoff_next_at
+        anchor: last_request
+        seconds: 3600
+        tolerance_pct: 1
+        slack_ms: 3000
+        why: "3 600 s, the ceiling C8 puts on the SDK's own backoff -- not the 9 999 s the header asked for"
+      - {check: state, path: backoff_step_ms, value: "2000", why: "the backoff advanced regardless"}
+      - {check: stderr, contains: ["exceeds the 3600 s ceiling"]}
+
+  - name: no header at all falls back to the backoff alone
+    mock: "429:"
+    steps:
+      - run: [init prd_conform001, track x]
+      - await: {count: 3, timeout_ms: 30000}
+    assert:
+      - {check: schedule, expect_s: [1, 2], tolerance_pct: 20, slack_ms: 400, why: "identical to C8's no-response arm"}
+
+  - name: an unparseable header is absent, never zero
+    mock: "429:soon"
+    env: {JELTO_DEBUG: "1"}
+    steps:
+      - run: [init prd_conform001, track x]
+      - await: {count: 3, timeout_ms: 30000}
+    assert:
+      - {check: no_request_before_s, request: 1, seconds: 0.7, why: "never as zero"}
+      - {check: schedule, expect_s: [1, 2], tolerance_pct: 20, slack_ms: 400, why: "the backoff alone"}
+      - {check: stderr, contains: ["is not delay-seconds and is treated as absent"]}
+
+  - name: Retry-After 1 at the tenth consecutive refusal neither shortens nor resets
+    env: {JELTO_NOW: "1788134400000", JELTO_DEBUG: "1"}
+    mock: ok
+    steps:
+      # Seven simulated hours clear the install out of the way for good: its
+      # delay is at most six (RFC-0001 §8.2 item 4), so this is not a race.
+      - run: [init prd_conform001]
+      - run: [sleep 25200000]
+      - mock_script:
+          - {mode: "429:", times: 9}
+          - {mode: "503:1"}
+        mock_default: "429:"
+      - run: [track x]
+      - run: [sleep 600000]
+        repeat: 10
+    assert:
+      - {check: request_count, equal: 11, why: "the claimed install, then ten consecutive refusals"}
+      - check: event_names
+        values: [heartbeat, install, x, x, x, x, x, x, x, x, x, x]
+        why: "the install is delivered once and claimed; every refusal carries the one event x"
+      - check: statuses
+        values: ["202", "429", "429", "429", "429", "429", "429", "429", "429", "429", "503"]
+        why: "the tenth refusal is the 503 carrying Retry-After: 1"
+      - {check: state, path: install_claimed, value: "true", why: "so no install can join the batch mid-arm"}
+      - check: state
+        path: backoff_step_ms
+        value: "1024000"
+        why: "the step doubled through all ten; a reset would put it back at 1 000"
+      - check: state_deadline
+        path: backoff_next_at
+        anchor: virtual_now
+        seconds: 512
+        tolerance_pct: 20
+        slack_ms: 2000
+        why: "the step is already ~512 s and stays there -- the header did not shorten it"
+      - check: stable_ids
+        request: 1
+        equal: 1
+        why: >-
+          from the first refusal on, and pinned at one event: the ten attempts
+          resend x with the one id it was given, and the batch never grows

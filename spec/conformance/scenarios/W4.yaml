@@ -1,0 +1,40 @@
+c: W4
+title: a client version outside the grammar is omitted, never sent as a bare number
+implements: spec/sdk-conformance.md §4 W4
+notes: |
+  §3's environment list has no way to give a host a client version it did not
+  choose, which is what this row requires. refhost reads JELTO_CLIENT_VERSION;
+  an SDK's own conformance-host needs the same knob or W4 cannot be run against
+  it at all. See the report.
+
+  The global W4 check runs on every arm of every scenario in this directory;
+  these arms are the three shapes the row names plus the well-formed control.
+arms:
+  - name: a bare 1.2.0
+    env: {JELTO_NOW: "1788134400000", JELTO_CLIENT_VERSION: "1.2.0", JELTO_DEBUG: "1"}
+    steps:
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: event_field, request: 0, event: 0, field: v, absent: true, why: "1.2.0 does not say which client shipped it"}
+      - {check: stderr, contains: ["^[a-z]+/[0-9A-Za-z.+-]{1,24}$"]}
+
+  - name: Electron/1.0 -- the platform segment is lower-case
+    env: {JELTO_NOW: "1788134400000", JELTO_CLIENT_VERSION: "Electron/1.0"}
+    steps:
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: event_field, request: 0, event: 0, field: v, absent: true}
+
+  - name: an empty v is an absent v
+    env: {JELTO_NOW: "1788134400000", JELTO_CLIENT_VERSION: ""}
+    steps:
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: event_field, request: 0, event: 0, field: v, absent: true, why: "and must not fall back to a bare number"}
+
+  - name: a well-formed version is sent
+    env: {JELTO_NOW: "1788134400000", JELTO_CLIENT_VERSION: "refhost/0.1.0+conformance"}
+    steps:
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: event_field, request: 0, event: 0, field: v, value: "refhost/0.1.0+conformance"}

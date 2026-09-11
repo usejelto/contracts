@@ -1,0 +1,18 @@
+c: C21
+title: the registered app slug rides on the event, and is absent when not given
+implements: spec/sdk-conformance.md §4 C21
+arms:
+  - name: init k mac
+    env: {JELTO_NOW: "1788134400000"}
+    steps:
+      - run: [init prd_conform001 mac, sleep 3000]
+    assert:
+      - {check: request_shape, request: 0, equal: 1, value: heartbeat}
+      - {check: event_field, request: 0, event: 0, field: a, value: mac, why: "the heartbeat carries a = mac"}
+
+  - name: init with no slug
+    env: {JELTO_NOW: "1788134400000"}
+    steps:
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: event_field, request: 0, event: 0, field: a, absent: true, why: "without the argument no a field is sent"}

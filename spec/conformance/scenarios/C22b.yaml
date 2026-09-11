@@ -1,0 +1,12 @@
+c: C22b
+title: setting a property to the value it already has is not a change
+implements: spec/sdk-conformance.md §4 C22b
+arms:
+  - name: the same value twice
+    env: {JELTO_NOW: "1788134400000"}
+    steps:
+      - run: [init prd_conform001, 'setprops {"license":"paid"}', sleep 3000]
+      - run: ['setprops {"license":"paid"}', sleep 3000]
+    assert:
+      - {check: request_count, equal: 1, why: "no extra heartbeat on the second call"}
+      - {check: event_names, counts: {heartbeat: 2}, why: "the daily heartbeat and the one the first change triggered; the second call added none"}

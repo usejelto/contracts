@@ -1,0 +1,16 @@
+c: C22c
+title: an install property outside the grammar is dropped client-side
+implements: spec/sdk-conformance.md §4 C22c
+arms:
+  - name: an upper-case key and a 30-character value
+    env: {JELTO_NOW: "1788134400000", JELTO_DEBUG: "1"}
+    steps:
+      - run:
+          - init prd_conform001
+          - 'setprops {"Email":"x@y.z"}'
+          - 'setprops {"license":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
+          - sleep 3000
+    assert:
+      - {check: event_field, request: 0, event: 0, field: props, absent: true, why: "neither reached the wire"}
+      - {check: stderr, contains: ["^[a-z0-9_]{1,32}$", "^[a-z0-9_.-]{1,24}$"], why: "a debug log naming the rule"}
+      - {check: request_count, equal: 1, why: "and no change, so no extra heartbeat"}

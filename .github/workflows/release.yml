@@ -1,0 +1,74 @@
+# Governing contract: spec/ci.md §7 in the source monorepo; see RELEASING.md.
+name: contracts release
+on:
+  push:
+    tags: ['v[0-9]*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish this tag after checks (also requires RELEASE_PUBLISH_ENABLED)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: component-release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - run: python3 release.py validate
+
+  checks:
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+    with:
+      release: true
+
+  publish:
+    needs: [validate, checks]
+    if: vars.RELEASE_PUBLISH_ENABLED == 'true' && (github.event_name == 'push' || inputs.publish)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: release
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-Linux
+          path: release-artifacts/
+      - name: Verify artifact source and contents
+        run: python3 release.py verify
+
+      - name: Create or finish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 release.py github

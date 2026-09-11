@@ -1,0 +1,102 @@
+c: C16
+title: the kill switch pauses, then re-checks with one heartbeat alone
+implements: spec/sdk-conformance.md §4 C16
+notes: |
+  Four things about how this is written.
+
+  (1) The mode is `stop:<seconds>+reject:stopped`, not the row's bare
+  `stop:60`. mockd's doc.go: a bare `stop:60` answers 202 with no rejections,
+  so the batch that got the switch was ACCEPTED and a correct SDK removes it
+  from the queue. The composed mode reproduces wire §8's executed bytes.
+
+  (2) The arm OPENS ON SEVEN SIMULATED HOURS under `ok`, and that is
+  load-bearing rather than scene-setting: it is C8c arm D's device, adopted
+  here for C8c arm D's reason. RFC-0001 §8.2 item 4 delays the `install` by a
+  random 0-6 h, so an arm that pins a clock and asserts an exact ORDERED event
+  list has the install land inside that list on some runs and not others. This
+  arm spans 70 s, which was 70 / 21 600 -- 1 run in 309, and a flake here
+  reads as (4) being wrong. Seven hours is longer than the longest delay the
+  rule allows, so the install is ALWAYS delivered and claimed before the first
+  assertion is about anything. That is determinism won from the contract
+  rather than from a seed: it needs no knob the conformance host does not
+  already have, so it holds for an SDK's own host as much as for refhost.
+
+  The preamble costs one request and shifts every index. It is exactly one:
+  the pump enqueues the due install and flushes in two turns of the same loop,
+  so the init heartbeat and the install go out together. The first request is
+  therefore `[heartbeat, install]`, the batch the switch answers is request 1,
+  the probe is request 2, and the drain is request 3.
+
+  (3) The 60 s is the HOST's 60 s, and that is why the mode says 25260. Under
+  JELTO_NOW the runner controls when the clock passes `until`, and mockd's
+  clock is pinned to the same instant so that its `until` lands in the host's
+  frame rather than in its own (mockd doc.go, "clock"). But that pin then
+  advances with REAL time while the host's clock advances only with `sleep`,
+  so the seven-hour preamble puts the two frames 7 h apart. mockd computes
+  `until = its own now + <seconds>`, so a bare 60 would name an instant 7 h in
+  the HOST's past. `25260` = 25 200 (the preamble) + 60 (the row's 60 s) puts
+  `until` 60 s ahead of the host's clock at the moment the answer arrives,
+  which is what C16 asks for: the recorded `until` is JELTO_NOW + 25 260 s and
+  the host is at JELTO_NOW + 25 230 s when it reads it. "No request for 60 s"
+  is then the observable claim "no request had been made by the end of the
+  step that advanced the clock to +30 s". The stderr row is the guard on this
+  arithmetic -- get it wrong and the switch is one that was never on, which
+  refhost says in as many words.
+
+  The switch is armed by a SCRIPT rather than by a mid-arm `mock:` step, so
+  that which request it answers is decided by ORDER and not by wall time. A
+  step-driven mode change races the host's flush: `sleep` returns when
+  refhost's settle heuristic sees the pump go quiet, and if it returns a
+  scheduler slice early (spec/conformance/TODO.md §5) the preamble's own
+  request could arrive after the mode was changed and take the switch. By
+  ordinal it cannot: refhost sends from one pump goroutine, so the preamble's
+  batch is always request 0 and the five x's are always request 1, whenever
+  each of them lands.
+
+  (4) MEASURED, AND IT IS NOT WHAT C16 SAYS -- see the `event_names` row.
+arms:
+  - name: stop for 60 s, then the probe, then the drain
+    env: {JELTO_NOW: "1788134400000", JELTO_DEBUG: "1"}
+    mock_script:
+      - {mode: ok}                                 # request 0: the preamble's heartbeat + install
+      - {mode: "stop:25260+reject:stopped"}        # request 1: the batch carrying the five x's
+    mock_default: ok                               # request 2 the probe, request 3 the drain
+    mock_clock_from_now: true
+    steps:
+      - run: [init prd_conform001]                 # step 0
+      # Seven simulated hours clear the install out of the way for good: its
+      # delay is at most six (RFC-0001 §8.2 item 4), so this is not a race.
+      - run: [sleep 25200000]                      # step 1  -- request 0 goes out, under `ok`
+      - run: [track x]                             # step 2
+        repeat: 5
+      - run: [sleep 30000]                         # step 3  -- clock is now +7 h 30 s, switch still on
+      - run: [track y]                             # step 4
+      - run: [sleep 40000]                         # step 5  -- clock is now +7 h 70 s, switch has lifted
+    assert:
+      - {check: request_count_after_step, step: 3, equal: 2, why: "the preamble's request and the batch that got the switch, and no third: after the stop response, no request for 60 s"}
+      - {check: request_shape, request: 2, equal: 1, value: heartbeat, why: "at ~60 s one heartbeat, alone in its batch"}
+      - {check: request_count, min: 4, why: "then the queue drains"}
+      - check: event_names
+        values: [heartbeat, install, x, x, x, x, x, heartbeat, y]
+        why: >-
+          MEASURED, AND IT IS NOT WHAT C16 SAYS. The first two are the
+          preamble's, delivered and accepted before the switch exists (note 2).
+          From there C16 asserts "queue holds x...y". It does not and cannot:
+          the five x's were in the batch the switch answered, that answer was a
+          202, and wire §2a makes a 202 an acceptance of the envelope however
+          many events it rejected. Nothing in RFC-0001 §8 or wire §6/§8 tells a
+          client to re-queue an event rejected `stopped`, and wire §8's own
+          rationale says the opposite in as many words -- a client that drains
+          into a live switch "spends its whole backlog", which is why the probe
+          exists. So the queue holds y, and only y. The recorded order is the
+          evidence: x went out once, before the pause, and was never resent.
+          See the report.
+      - check: stderr
+        contains: ["kill switch: no request until", "kill switch elapsed"]
+        not_contains: ["is already past"]
+        why: >-
+          the switch was armed, and armed on an `until` in the host's FUTURE --
+          refhost logs "is already past" for one that is not, which is the
+          exact shape a mockd/host frame mismatch takes (note 3): the arm would
+          still be green and would be testing nothing. "elapsed" is the other
+          end, the lift that the probe is the first request after.

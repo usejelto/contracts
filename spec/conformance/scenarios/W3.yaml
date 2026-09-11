@@ -1,0 +1,20 @@
+c: W3
+title: an over-long prop value and a twenty-first key are dropped client-side
+implements: spec/sdk-conformance.md §4 W3
+arms:
+  - name: 201 characters, and 21 keys
+    env: {JELTO_NOW: "1788134400000", JELTO_DEBUG: "1"}
+    steps:
+      - run:
+          - init prd_conform001
+          - 'track x {"k":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
+          - 'track y {"k1":"a","k2":"a","k3":"a","k4":"a","k5":"a","k6":"a","k7":"a","k8":"a","k9":"a","k10":"a","k11":"a","k12":"a","k13":"a","k14":"a","k15":"a","k16":"a","k17":"a","k18":"a","k19":"a","k20":"a","k21":"a"}'
+          - track z
+          - sleep 6000
+    assert:
+      - {check: event_names, values: [heartbeat, z], why: "both dropped, never sent"}
+      - check: stderr
+        contains:
+          - "spec/wire-v1.md §3 caps a string at 200"
+          - "spec/wire-v1.md §3 caps them at 20"
+        why: "a debug log naming the rule"

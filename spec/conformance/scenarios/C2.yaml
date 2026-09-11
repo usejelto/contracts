@@ -1,0 +1,20 @@
+c: C2
+title: the install id survives a new process and is never the nil UUID
+implements: spec/sdk-conformance.md §4 C2
+arms:
+  - name: two processes over one state directory
+    steps:
+      - run: [init prd_conform001, installid]
+      - restart: {}
+      - run: [init prd_conform001, installid]
+    assert:
+      - {check: host_reply_stable, key: installid, why: "same UUID both times"}
+      - check: host_reply
+        key: installid
+        request: 0
+        regex: '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+        why: "a UUIDv4, and therefore never the nil UUID"
+      - check: state
+        path: install_id
+        regex: '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+        why: "state contains it"

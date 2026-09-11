@@ -1,0 +1,24 @@
+c: C15
+title: t is the host clock, unmodified, at both ends of the range
+implements: spec/sdk-conformance.md §4 C15
+notes: |
+  §3 calls JELTO_NOW a "fixed clock ... so day-rollover scenarios run in
+  seconds", which only works if something advances it. refhost pins the clock
+  to JELTO_NOW and lets `sleep <ms>` move it; see its doc.go. That makes `t`
+  exactly the pin here, so the assertion is on the literal and not on a range.
+arms:
+  - name: the epoch itself
+    env: {JELTO_NOW: "0"}
+    steps:
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: request_count, equal: 1}
+      - {check: t_literal, request: 0, event: 0, value: "0", why: "sent as the host clock says"}
+
+  - name: ten years ahead
+    env: {JELTO_NOW: "2103753600000"}
+    steps:
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: request_count, equal: 1}
+      - {check: t_literal, request: 0, event: 0, value: "2103753600000", why: "no client-side correction"}

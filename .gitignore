@@ -1,0 +1,13 @@
+/dist/
+/bin/
+/spec/conformance/refhost/refhost
+/spec/conformance/mockd/mockd
+__pycache__/
+*.py[cod]
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+
+/release-artifacts/

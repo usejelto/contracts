@@ -1,0 +1,25 @@
+c: C11
+title: memory and CPU budgets
+implements: spec/sdk-conformance.md §4 C11
+skip: |
+  C11's budgets are properties of the SDK's runtime, and the reference host's
+  runtime is Go. "host RSS delta <= 2 MB" is under the Go runtime's own
+  floor -- a goroutine stack, the heap arena and net/http's buffers exceed it
+  before a single event is queued -- so running this row against refhost would
+  measure the language, not the SDK. Measured rather than assumed: refhost
+  driven through `init` + 10 000 tracks on an Apple Silicon Mac gives an RSS
+  delta of 5 200 KiB and a heap delta of 2 430 KiB against a 2 MB ceiling,
+  with the baseline taken after `init` -- the most generous reading
+  available -- and a `track_p99_us` of 754. refhost cannot pass C11 by any
+  measurement. Asserting only the CPU half would print `PASS C11` while half
+  the row never ran, which is worse than an honest skip: refhost's 754 us p99
+  sits close enough to the 1 ms line to make the shared gate flaky besides.
+
+  C11's budgets are discharged in `sdk/swift`'s own test target instead
+  (`BudgetTests.swift`), where they can be enforced continuously by
+  `swift test` and where the 2 MB ceiling actually binds: RSS delta via
+  `mach_task_basic_info` across 10 000 `track` calls, and per-`track` p99
+  <= 1 ms. The host still reports what it can: `exit` carries `tracks`,
+  `track_p50_us`, `track_p99_us` and `heap_delta_kib`, so the numbers above
+  are on the record even while the row itself is not asserted.
+arms: []

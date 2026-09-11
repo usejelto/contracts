@@ -1,0 +1,36 @@
+c: C6
+title: the queue caps at 1 MB and 1 000 events, oldest dropped first
+implements: spec/sdk-conformance.md §4 C6
+notes: |
+  `hangup` rather than `down`: mockd's doc.go says a refused connection is
+  never recorded, so an arm run against `down` cannot show that the SDK tried
+  at all. `hangup` accepts, records, then closes without answering -- a network
+  error either way under RFC-0001 §8.3 item 8. It also lets this arm assert
+  what C6 leaves implicit, that the events really were offered and really were
+  refused.
+
+  The 1 500 tracks are distinctly named (x0 ... x1499) so that "the oldest were
+  dropped" is a fact about identity and not about a count. §4's 1-based
+  "events 1-500 absent, 501-1500 present" is x0-x499 and x500-x1499 here.
+arms:
+  - name: 1500 tracks against a server that never answers
+    mock: hangup
+    steps:
+      - run: [init prd_conform001]
+      - run: ["track x{i}"]
+        repeat: 1500
+    assert:
+      - check: queue
+        max: 1000
+        value: "1048576"
+        why: >-
+          <= 1 MB and <= 1 000 events. The byte half is read as §3.2's
+          `queue.bytes` -- what the SDK counts against its OWN cap, never a
+          stat of a file. An on-disk figure is not comparable between
+          implementations (a JSON-lines file is exactly its lines, a plist is
+          padded, a SQLite database has pages and a free list), so a cap read
+          off the file system would forbid on one platform a queue it permits
+          on another while both hold the same events.
+      - {check: queue, contains: [x1499, x500], not_contains: [x0, x499, heartbeat], why: "the oldest were dropped"}
+      - {check: request_count, min: 1, why: "the batches really were offered"}
+      - {check: statuses, value: hangup}

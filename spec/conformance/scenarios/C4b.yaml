@@ -1,0 +1,42 @@
+c: C4b
+title: the install is retried on each launch, and claimed after 30 days without a 202
+implements: spec/sdk-conformance.md §4 C4b
+notes: |
+  `hangup` rather than `down`, for mockd's reason: with the listener closed the
+  connection is refused before mockd learns an attempt was made, and both
+  halves of this row want evidence of attempts.
+
+  "no further attempts" is read narrowly, as "no further install EVENT is
+  enqueued", because that is the only reading any rule supports. RFC-0001 §8.2
+  item 4 says what marking claimed stops -- enqueueing a second install -- and
+  nothing anywhere says a queued event is discarded because a timer expired.
+  The queued copy therefore keeps being offered with the rest of the batch,
+  which is §8.3 item 8 doing its job. Arm B asserts the narrow reading: the
+  claim is marked, and the queue still holds exactly ONE install.
+arms:
+  - name: retried on each of three launches
+    mock: hangup
+    env: {JELTO_NOW: "1788134400000"}
+    steps:
+      - run: [init prd_conform001, sleep 25200000]
+      - restart: {env: {JELTO_NOW: "1788220800000"}}
+      - run: [init prd_conform001, sleep 3000]
+      - restart: {env: {JELTO_NOW: "1788307200000"}}
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: event_names, counts: {install: 3}, why: "offered on every launch"}
+      - {check: statuses, value: hangup, why: "and refused every time"}
+      - {check: queue, counts: {install: 1}, why: "one install event, resent -- not three"}
+
+  - name: thirty simulated days without a 202
+    mock: hangup
+    env: {JELTO_NOW: "1788134400000"}
+    steps:
+      - run: [init prd_conform001, sleep 25200000]
+      - run: [sleep 86400000]
+        repeat: 31
+      - restart: {env: {JELTO_NOW: "1790812800000"}}
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: state, path: install_claimed, value: "true", why: "state marks claimed without a 202"}
+      - {check: queue, counts: {install: 1}, why: "no further install was enqueued"}

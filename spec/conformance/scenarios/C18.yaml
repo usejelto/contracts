@@ -1,0 +1,13 @@
+c: C18
+title: disable wipes the queue, the id and the directory, and nothing is sent after it
+implements: spec/sdk-conformance.md §4 C18
+arms:
+  - name: disable between two tracks
+    env: {JELTO_NOW: "1788134400000"}
+    steps:
+      - run: [init prd_conform001, track x, disable, installid, track y, sleep 6000]
+    assert:
+      - {check: request_count, equal: 0, why: "y never sent -- and nor was x"}
+      - {check: host_reply, key: installid, empty: true, why: "installid prints empty"}
+      - {check: queue, absent: true, why: "disable wipes the queue"}
+      - {check: state_dir_empty, why: "state dir empty"}

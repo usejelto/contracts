@@ -1,0 +1,16 @@
+c: C9b
+title: a 402 is final too -- no retry, no backoff loop, and the SDK keeps working
+implements: spec/sdk-conformance.md §4 C9b
+arms:
+  - name: 402 twice
+    env: {JELTO_NOW: "1788134400000", JELTO_DEBUG: "1"}
+    mock: "402"
+    steps:
+      - run: [init prd_conform001, track x, sleep 5000]
+      - run: [track y, sleep 6000]
+    assert:
+      - {check: request_count, equal: 2, why: "no retry of either event"}
+      - {check: statuses, value: "402"}
+      - {check: event_names, values: [heartbeat, x, y], why: "the SDK keeps accepting calls"}
+      - {check: state, path: backoff_step_ms, empty: true, why: "and no backoff loop"}
+      - {check: stderr, contains: ["payment_required"], why: "one debug line names it"}

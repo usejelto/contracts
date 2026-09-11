@@ -1,0 +1,10 @@
+c: C19
+title: reproducible builds
+implements: spec/sdk-conformance.md §4 C19
+skip: |
+  C19 is a build-system assertion, not a behavioural one: it drives no host and
+  makes no request, so there is nothing for mockd to record and nothing in a
+  state directory to read. It belongs to the SDK's release pipeline (RFC-0001
+  §8.7 item 19, "release checksums are published beside the artifact") and the
+  runner has no business claiming to have checked it.
+arms: []

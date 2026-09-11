@@ -1,0 +1,53 @@
+c: C8b
+title: the header and no header, the same run twice -- composition, not one number
+implements: spec/sdk-conformance.md §4 C8b
+notes: |
+  Arm A runs C8b's `429:20` as written and observes the first two retries:
+  no request before 20 s, then another 20 s. Its third clause -- "the header
+  governs until the backoff overtakes (~32 s)" -- is the SIXTH retry of that
+  schedule (0, 20, 40, 60, 80, 100, then 132 at a step of 32 s), so seeing the
+  crossover at `Retry-After: 20` costs 132 s of wall time. Arm C reproduces
+  exactly that rule at `429:3`, where the crossover is the third retry and the
+  arm costs 18 s: 3, 3, 4, 8 is the header binding twice and then the backoff
+  overtaking it. The rule is one rule; only the number differs.
+
+  `down` is `hangup` for the reason C8 gives.
+arms:
+  - name: 429 Retry-After 20 -- no request before 20 s, and 20 s again after it
+    mock: "429:20"
+    steps:
+      - run: [init prd_conform001, track x]
+      - await: {count: 3, timeout_ms: 90000}
+    assert:
+      - {check: request_count, equal: 3}
+      - {check: no_request_before_s, request: 1, seconds: 20, why: "the header is a floor"}
+      - {check: no_request_before_s, request: 2, seconds: 20}
+      - check: schedule
+        expect_s: [20, 20]
+        tolerance_pct: 5
+        slack_ms: 500
+        why: "the later of the two floors while the header is the larger"
+
+  - name: the same run with no response at all -- ~1 s
+    mock: hangup
+    steps:
+      - run: [init prd_conform001, track x]
+      - await: {count: 2, timeout_ms: 20000}
+    assert:
+      - check: schedule
+        expect_s: [1]
+        tolerance_pct: 20
+        slack_ms: 400
+        why: "an SDK that ignored Retry-After would produce this schedule for both arms"
+
+  - name: the crossover, at Retry-After 3 -- the backoff overtakes and advances regardless
+    mock: "429:3"
+    steps:
+      - run: [init prd_conform001, track x]
+      - await: {count: 5, timeout_ms: 60000}
+    assert:
+      - check: schedule
+        expect_s: [3, 3, 4, 8]
+        tolerance_pct: 20
+        slack_ms: 500
+        why: "3 s binds while it is the larger; the backoff binds from step 4 s on, having advanced through both"

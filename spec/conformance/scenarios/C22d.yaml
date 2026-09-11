@@ -1,0 +1,10 @@
+c: C22d
+title: disable wipes the install properties with the rest of the state
+implements: spec/sdk-conformance.md §4 C22d
+arms:
+  - name: disable after setprops
+    env: {JELTO_NOW: "1788134400000"}
+    steps:
+      - run: [init prd_conform001, 'setprops {"license":"paid"}', sleep 3000, disable]
+    assert:
+      - {check: state_dir_empty, why: "props wiped with the rest of the state"}
