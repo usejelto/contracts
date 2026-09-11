@@ -1,6 +1,6 @@
 # spec/wire-v1 — ingest wire format
 
-Status: v1 draft, rev 0.22 (frozen at end of M1) · Gates: M1 · Normative for: server validation,
+Status: v1 draft, rev 0.23 (frozen at end of M1) · Gates: M1 · Normative for: server validation,
 `spec/wire-v1.schema.json`, every SDK, the snippet, `spec/sdk-conformance.md`.
 
 Key words MUST, SHOULD, MAY are RFC 2119. This document is the contract; RFC-0001 §2 is the
@@ -35,6 +35,14 @@ while its suite reported green.
 endpoint exists at all: a customer on a **first-party subdomain** (RFC-0001 §10) serves `/v1/e` on
 their own hostname, and their snippet and SDK are configured with it.
 
+An endpoint, explicit or from the environment, MUST be an absolute `http` or `https` URL carrying
+no userinfo, and an empty value is an absent value — the next level of the precedence applies. A
+client handed a **non-empty value that is not one MUST become inactive for the process** and say
+so under debug, rather than fall through to another endpoint: a mistyped first-party host must not
+quietly route a customer's events to the default, and an unparseable one must not be retried
+forever as a network error. Through rev 0.22 this document was silent on both and the four app
+SDKs shipped four answers (rev 0.23).
+
 - The server MUST accept `text/plain` as well (`sendBeacon` cannot set headers).
 - The server MUST respond to `OPTIONS` with permissive CORS for any origin; the Origin check
   in §6 is done per event, not per request.
@@ -54,6 +62,12 @@ their own hostname, and their snippet and SDK are configured with it.
 
 Body size MUST be ≤ 65 536 bytes → `413`. Malformed JSON → `400 malformed`. §2a gives every
 status this endpoint answers and the exact body each one carries.
+
+The key's shape is checked on both ends. An SDK MUST refuse `init` with a key outside
+`^prd_[a-z0-9]{10}$`, logging the rule under debug and sending nothing, so a mistyped key fails
+at the call site rather than as one `400 malformed` per batch for the life of the install
+(rev 0.23; the shape W2 asserts for event names, applied to the key, and pinned by each SDK's own
+unit tests).
 
 ## 2a. Response statuses
 
@@ -431,6 +445,15 @@ has no product to attribute and is left to process metrics.
 
 ## Amendments to RFC-0001
 
+- rev 0.23: **the client side of §1 and §2 — an invalid endpoint or key is refused at `init`,
+  never sent and never retried** (§1, §2) — *every app SDK; no server or schema change, and the
+  freeze is not in play.* §1 now requires an endpoint to be an absolute `http(s)` URL without
+  userinfo, treats an empty value as absent, and makes a non-empty invalid one leave the client
+  inactive with a debug line instead of falling through to another host or retrying a builder
+  error forever; §2 now requires the SDK to refuse a key outside `^prd_[a-z0-9]{10}$` at `init`.
+  Written down because the four app SDKs had shipped four answers: .NET refused, Electron and
+  Swift fell through to the next host, Tauri retried an empty endpoint indefinitely.
+  `spec/sdk-conformance.md` v0.18 §5 adds the matching owner-only storage rule.
 - rev 0.21: **an ignored `f` is counted too — the `f`/`vid` asymmetry is retired** (§5.1) —
   *the account API's `memory_active` fact, and the ingest handler.* **No field changes and the
   freeze is not in play**: this is server behaviour and one new value in `ingest_counters.reason`, an

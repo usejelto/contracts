@@ -1,6 +1,6 @@
 # spec/sdk-conformance — SDK behavioural contract as tests
 
-Status: v0.17 · Gates: M1 (Swift), M3 (Electron, Tauri 2, .NET desktop) · Normative for: every SDK that calls itself
+Status: v0.18 · Gates: M1 (Swift), M3 (Electron, Tauri 2, .NET desktop) · Normative for: every SDK that calls itself
 Jelto-compatible. RFC-0001 §8 lists the rules; this document makes each one a test.
 
 ## 1. Harness
@@ -367,6 +367,13 @@ fifth surface is the emptiness of *that* directory: an SDK keeping a byte anywhe
 C5, C18 and C22d while failing what they assert. **What is inside is the SDK's own** — the format,
 the file names, the number of files, whether there are files at all — and it is §3.2's export, not
 the directory, that the other eight state scenarios read.
+
+On POSIX hosts the SDK creates its state directory owner-only (`0700`) and every file it writes
+there owner-only (`0600`), re-asserting the mode on a directory that already exists, because what
+is inside is an install identifier and the customer's queued events (threat model A2) and another
+local account on the same host is not the customer's end user. On Windows the per-user
+`LocalApplicationData` ACL is the bound. The runner does not assert this — §1's fifth surface is the
+directory's emptiness, not its mode — so each SDK's own unit tests pin it (v0.18).
 
 **Swift.** State in `~/Library/Application Support/<bundle-id>/jelto/`. Runs on a dedicated
 `DispatchQueue(qos: .utility)`; never touches the main thread; no `@MainActor`. Uses
