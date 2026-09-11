@@ -53,6 +53,8 @@ jobs:
           go-version-file: go.mod
       - name: Component tests and packages
         run: make test build package
+      - name: Go dependency vulnerability check
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
       - name: Conformance twice
         run: make conformance-twice
 
