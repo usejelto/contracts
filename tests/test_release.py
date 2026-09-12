@@ -34,6 +34,11 @@ class ReleaseTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
+        # A workflow run exports GITHUB_REF_TYPE, so the ancestry guard would otherwise read
+        # the ref the runner happens to be on instead of the one a test selects.
+        ref_type = patch.dict('os.environ', {'GITHUB_REF_TYPE': 'tag'})
+        ref_type.start()
+        self.addCleanup(ref_type.stop)
         self.root = Path(self.temp.name)
         self.repo = 'example/jelto-analytics'
         (self.root / 'release.json').write_text(json.dumps({'component': 'analytics', 'repository': self.repo}))
