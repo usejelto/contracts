@@ -76,7 +76,7 @@ archive under the monorepo's `dist/contracts/` directory.
 ## Releases
 
 The component-owned release workflow publishes verified ZIP/checksum assets
-after tag validation and standalone CI. Follow [RELEASING.md](RELEASING.md)
+after tag validation and standalone CI. Follow [RELEASING.md](https://github.com/usejelto/contracts/blob/main/RELEASING.md)
 to configure the repository and enable publishing; no account setup is implied.
 
 ## Community and license
