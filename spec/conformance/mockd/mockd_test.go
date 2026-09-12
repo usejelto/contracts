@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +29,13 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "mockd test: temp dir:", err)
 		os.Exit(1)
 	}
-	mockdBinary = filepath.Join(dir, "mockd")
+	name := "mockd"
+	if runtime.GOOS == "windows" {
+		// exec resolves a path without an extension through PATHEXT, so a
+		// bare "mockd" is never found; the runner names its host the same way.
+		name += ".exe"
+	}
+	mockdBinary = filepath.Join(dir, name)
 	build := exec.Command("go", "build", "-o", mockdBinary, ".")
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {
