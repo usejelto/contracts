@@ -1,0 +1,5 @@
+# The contracts archive is built from what is on disk and pinned by SHA-256,
+# so a checkout must be byte-identical on every platform. Without this a
+# Windows checkout rewrote every text file to CRLF and produced a different
+# archive from the same commit.
+* -text
