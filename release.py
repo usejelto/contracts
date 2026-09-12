@@ -512,7 +512,17 @@ def smoke(root, registry=False):
             if changed != 1:
                 raise ValueError('Cannot select registry crate in the native example')
             cargo_path.write_text(content)
-            run('cargo', 'update', '--manifest-path', cargo_path, '-p', 'tauri-plugin-jelto', cwd=example)
+            # Resolve against the example's own lockfile: only the plugin moves
+            # from the path source to the registry, every other version stays
+            # pinned. `cargo update -p` cannot do this -- the path package is
+            # gone from the manifest, so cargo drops it from the previous
+            # resolve and the spec matches nothing.
+            run('cargo', 'fetch', '--manifest-path', cargo_path, cwd=example)
+            crate = next(item for item in record['packages'] if item['kind'] == 'cargo')
+            locked = re.search(r'name = "tauri-plugin-jelto"\nversion = "([^"]+)"\nsource = "([^"]+)"\nchecksum = "([a-f0-9]{64})"',
+                               (example / 'src-tauri/Cargo.lock').read_text())
+            if not locked or locked.group(1) != value or 'crates.io' not in locked.group(2) or locked.group(3) != crate['sha256']:
+                raise ValueError('The native example did not resolve the published crate: ' + repr(locked and locked.groups()))
             run('npm', 'ci', cwd=example, env=env)
             run('npm', 'run', 'tauri', 'build', '--', '--no-bundle', cwd=example, env=env)
         print('PASS isolated ' + component + (' registry' if registry else ' package') + ' consumer')
