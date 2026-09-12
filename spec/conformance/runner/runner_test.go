@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -432,25 +433,39 @@ func TestStateChecksFailWhenTheHostExportedNothing(t *testing.T) {
 // Spawn deliberately malformed hosts to test stdout framing. Correct hosts cannot
 // be asked to emit protocol violations through the conformance command language.
 
-// writeFakeHost puts an executable sh host in a temp dir and returns its path.
-func writeFakeHost(t *testing.T, body string) string {
+// fakeHostEnv carries the stdout a fake host writes after reading one command
+// line. The test binary plays that host itself (TestMain below), so no shell
+// is involved and the same tests run on Windows.
+const fakeHostEnv = "CONFORMANCE_FAKE_HOST_STDOUT"
+
+func TestMain(m *testing.M) {
+	if stdout, ok := os.LookupEnv(fakeHostEnv); ok {
+		_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
+		_, _ = os.Stdout.WriteString(stdout)
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
+
+// fakeHost returns a host binary and the environment that makes it answer the
+// first command with exactly `stdout`.
+func fakeHost(t *testing.T, stdout string) (string, map[string]string) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "conformance-host")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body), 0o755); err != nil {
+	binary, err := os.Executable()
+	if err != nil {
 		t.Fatal(err)
 	}
-	return path
+	return binary, map[string]string{fakeHostEnv: stdout}
 }
 
 // A structured logger pointed at stdout is the dangerous case: the line is
 // valid JSON, so the decode succeeds and the runner would take it as the
 // reply. Every later reply is then read one behind.
 func TestSendRejectsAStrayJSONLineOnStdout(t *testing.T) {
-	host := writeFakeHost(t, `read line
-printf '{"level":"info","msg":"jelto: posting 1 event"}\n'
-printf '{"cmd":"init","ok":true}\n'
+	host, env := fakeHost(t, `{"level":"info","msg":"jelto: posting 1 event"}
+{"cmd":"init","ok":true}
 `)
-	started, err := StartHost(host, map[string]string{})
+	started, err := StartHost(host, env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -470,11 +485,10 @@ printf '{"cmd":"init","ok":true}\n'
 // but the message blamed JSON rather than the rule, so a reader chased a parser
 // bug instead of a print statement.
 func TestSendRejectsAStrayNonJSONLineOnStdout(t *testing.T) {
-	host := writeFakeHost(t, `read line
-printf 'jelto: sending 1 event\n'
-printf '{"cmd":"init","ok":true}\n'
+	host, env := fakeHost(t, `jelto: sending 1 event
+{"cmd":"init","ok":true}
 `)
-	started, err := StartHost(host, map[string]string{})
+	started, err := StartHost(host, env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -489,10 +503,9 @@ printf '{"cmd":"init","ok":true}\n'
 // The control. Without it the two rows above would pass against a Send that
 // rejected everything.
 func TestSendAcceptsAReplyThatEchoesTheCommandWord(t *testing.T) {
-	host := writeFakeHost(t, `read line
-printf '{"cmd":"init","ok":true,"us":41}\n'
+	host, env := fakeHost(t, `{"cmd":"init","ok":true,"us":41}
 `)
-	started, err := StartHost(host, map[string]string{})
+	started, err := StartHost(host, env)
 	if err != nil {
 		t.Fatal(err)
 	}
