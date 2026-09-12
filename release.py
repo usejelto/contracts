@@ -173,8 +173,12 @@ def archive_files(data, kind):
     else:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             for entry in archive.infolist():
+                # ZipInfo.filename is normalised with the running platform's
+                # separator, so on Windows a backslash entry is already read
+                # as a forward slash and the guard could not see it. The raw
+                # central-directory name is what the archive really carries.
                 if not entry.is_dir():
-                    add(entry.filename, archive.read(entry))
+                    add(entry.orig_filename, archive.read(entry))
         if kind == 'nuget':
             output.pop('.signature.p7s', None)
     return output

@@ -1,6 +1,7 @@
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -13,6 +14,22 @@ import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import release
+
+
+def unsafe_zip(name, body=b'unsafe'):
+    """A zip whose central directory carries `name` byte for byte.
+
+    writestr() would normalise the platform separator on the way in, so on
+    Windows a backslash fixture would never reach the archive.
+    """
+    data = io.BytesIO()
+    with zipfile.ZipFile(data, 'w') as archive:
+        entry = zipfile.ZipInfo('placeholder')
+        entry.filename = name
+        archive.writestr(entry, body)
+    raw = data.getvalue()
+    assert name.encode() in raw, name
+    return raw
 
 
 def npm_archive(value='1.2.3', body=b'export const ready = true'):
@@ -138,11 +155,21 @@ class ReleaseTests(unittest.TestCase):
 
     def test_unsafe_archives_fail(self):
         for name in ['../escape', '/absolute', 'C:/file', 'folder\\file']:
-            data = io.BytesIO()
-            with zipfile.ZipFile(data, 'w') as archive:
-                archive.writestr(name, 'unsafe')
+            data = unsafe_zip(name)
             with self.assertRaises(ValueError):
-                release.archive_files(data.getvalue(), 'zip')
+                release.archive_files(data, 'zip')
+
+    def test_backslash_entry_fails_where_the_platform_separator_is_a_backslash(self):
+        # zipfile normalises os.sep to '/' in ZipInfo.filename while reading,
+        # so on Windows the guard must look at the raw name or it accepts an
+        # archive that Linux rejects. Simulate that reader here so every
+        # platform's CI covers it.
+        data = unsafe_zip('folder\\file')
+        with patch.object(os, 'sep', '\\'):
+            with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                self.assertEqual(archive.infolist()[0].filename, 'folder/file')
+            with self.assertRaises(ValueError):
+                release.archive_files(data, 'zip')
         data = io.BytesIO()
         with tarfile.open(fileobj=data, mode='w:gz') as archive:
             entry = tarfile.TarInfo('package/link')
