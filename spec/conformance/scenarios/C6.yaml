@@ -19,6 +19,13 @@ arms:
       - run: [init prd_conform001]
       - run: ["track x{i}"]
         repeat: 1500
+      # The SDK offers on its own timers (2 s after init, 5 s after a track --
+      # a full batch does not send), so wait for the first offer rather than
+      # racing it: on a loaded runner the 1 500 round-trips finish before the
+      # init timer fires and the exit flush is too short to reach mockd, and
+      # request_count read 0 for a host that would have sent a moment later.
+      # hangup answers at once, so this costs nothing when the SDK is quick.
+      - await: {count: 1, timeout_ms: 15000}
     assert:
       - check: queue
         max: 1000
