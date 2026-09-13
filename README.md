@@ -3,7 +3,7 @@
 Shared analytics protocols, executable schemas, signature catalogs and SDK
 conformance tools for Jelto. This standalone module owns the runner, mock server,
 reference host and wire validator. It builds, tests and packages without the
-backend or any SDK checkout. Version 0.1.1 is the current release; 0.1.0 was the first.
+backend or any SDK checkout. Version 0.1.2 is the current release; 0.1.0 was the first.
 
 ## Layout
 
@@ -32,7 +32,7 @@ release tooling, and Make. Run from this directory:
 make test                 # uncached Go tests and package/installer checks
 make build                # runner, mockd, refhost and dogfood tools in bin/
 make conformance-twice    # full reference behavior checks, twice
-make package              # dist/jelto-contracts-0.1.1.zip and .zip.sha256
+make package              # dist/jelto-contracts-0.1.2.zip and .zip.sha256
 ```
 
 Conformance reports C11 runtime budgets and C19 SDK reproducibility as separate
@@ -47,7 +47,7 @@ versioned archive and checksum; it does not publish a repository or release.
 
 ## Consumers
 
-The Go module is `jelto.io/jelto/contracts`, currently version **0.1.1**. Backend
+The Go module is `jelto.io/jelto/contracts`, currently version **0.1.2**. Backend
 code imports its `spec/signatures` package; verification reads `WireSpec()` and
 `WireSchema()` from the root package. These inputs are embedded in the module,
 so consumers do not need filesystem paths into this repository.
@@ -62,7 +62,7 @@ or an extracted release. The archive preserves `spec/conformance/runner`,
 tools. Install into a new directory with the checksum from the matching release:
 
 ```sh
-python3 install.py /absolute/path/jelto-contracts-0.1.1.zip SHA256 /absolute/path/contracts
+python3 install.py /absolute/path/jelto-contracts-0.1.2.zip SHA256 /absolute/path/contracts
 ```
 
 The installer validates the archive checksum, version, paths and every file's
