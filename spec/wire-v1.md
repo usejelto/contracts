@@ -1,6 +1,6 @@
 # spec/wire-v1 — ingest wire format
 
-Status: v1 draft, rev 0.23 (frozen at end of M1) · Gates: M1 · Normative for: server validation,
+Status: v1 draft, rev 0.24 (frozen at end of M1) · Gates: M1 · Normative for: server validation,
 `spec/wire-v1.schema.json`, every SDK, the snippet, `spec/sdk-conformance.md`.
 
 Key words MUST, SHOULD, MAY are RFC 2119. This document is the contract; RFC-0001 §2 is the
@@ -243,9 +243,10 @@ Processing is per event. The envelope is accepted (`202`) even if every event is
 
 | `reason` | When |
 |---|---|
-| `unknown_event` | custom `n` not in `event_schema` |
-| `reserved_event` | client-sent `n = "purchase"` — the name is reserved and a client may never send it (§4) |
-| `prop_not_allowlisted` | a `props` key not allowed for `(product, n)` |
+| `unknown_event` | an event unsupported by an older server; current servers discover custom names automatically |
+| `event_schema_limit` | discovery would exceed 100 custom names or 20 property keys for one event |
+| `reserved_event` | a client-sent server-only payment/subscription name, including `purchase` (§4, §7) |
+| `prop_not_allowlisted` | a property outside a fixed built-in schema (§4); custom keys are discovered |
 | `origin_not_allowed` | web event whose request `Origin` (or `u` host when Origin absent) is not one of the product's domains |
 | `missing_field` / `invalid_field` | §3–§5 violations; `field` names it |
 | `duplicate` | `id` seen within 10 minutes (silently counted; not returned unless `?debug=1`) |
@@ -280,7 +281,7 @@ unknown key, so a reader arriving at the status meets it there too.
 **`reserved_event` exists because `unknown_event` would have been a lie.** `purchase` is not
 unknown to the server — §4 knows the name and forbids it — and answering as though it were merely
 unrecognised would understate what happened by exactly the distance that matters. Worse,
-`unknown_event` is the rejection `event_schema` (§7) exists to cure: a customer who saw a stream of
+Before automatic discovery, `unknown_event` was the rejection an `event_schema` entry cured: a customer who saw a stream of
 `unknown_event` rows named `purchase` on their Ops card could add `purchase` to their own allowlist
 to make the rejections stop, and have the event **accepted** — client-sent money landing on an
 endpoint authenticated for a pageview. `reserved_event` is what stops that path from opening at
@@ -304,37 +305,33 @@ every retry and carried across the spool as the file name (RFC §7.2). `id`'s 10
 and must not be relied on for it. A client MUST NOT treat a lost `202` as a reason to alter the
 `id`s in the batch it resends.
 
-## 7. Custom event schema
+## 7. Custom event discovery
 
-`event_schema(product_id, event, allowed_props[])` in Postgres. Reserved events have fixed
-schemas (§4) that cannot be extended in v1 — **with exactly one exception, which §4 has always
-stated and this sentence used to contradict**: a `heartbeat` carries install properties, and the
-keys a product allowlists for `heartbeat` here are added to the reserved `license`. That is an
-extension of a reserved event's schema, it is what `internal/ingest/gates.go` does (`allowedProps`
-returns `license` unioned with the product's `event_schema` row for `heartbeat`), and
-`spec/sdk-conformance.md` C22 exercises it. Executed with `edition` allowlisted:
-`{"license":"paid","edition":"pro"}` is `202 {}` and both values are stored, while
-`{"license":"paid","seats":"5"}` is `prop_not_allowlisted` naming `seats`. **No other reserved
-event takes an allowlist** — `pageview`, `engagement` and `install` take no props at all,
-`app_updated` takes exactly `from_version` and `to_version`,
-`click:download` and `click:outbound` take exactly their one fixed prop, and `onboarding:<step>`
-takes exactly `status` and `reason` — so this is one row of §4 and not a general licence to widen
-the other six.
+`event_schema(product_id, event, allowed_props[])` is a discovered catalog in Postgres.
+A custom event requires no preregistration: its first structurally valid, eligible
+receipt adds the name and property keys. New keys on an existing event are merged.
+Only names and keys are stored in this catalog, never property values. The limits
+are 100 custom names per product and 20 distinct keys per event; a discovery that
+would exceed either is rejected `event_schema_limit` with no partial schema write.
+Concurrent discovery and optional manual catalog edits serialize on the product.
+A removed event can be discovered again when sent; removal is not a collection block.
 
-A custom event with no `props` needs a row with an
-empty list — its existence is the allowlist. Unknown event names are rejected, not auto-created:
-the dashboard's "Events" settings page is where a customer adds one, and the Ops card shows
-`unknown_event` counts with the names seen so the customer knows what to add.
+Discovery follows origin, blocking, admission and reserved-name checks, before
+claiming deduplication IDs or writing event/session data. A catalog storage failure
+returns retryable HTTP 503 and MUST NOT consume the failing event's ID.
 
-**`purchase` may not be added to a product's `event_schema`, under any allowlisted prop set.**
-§4 reserves the name at the wire, not by the absence of a schema row, so an `event_schema` entry
-naming `purchase` would gain a client no ability it does not already lack: `/v1/e` answers
-`reserved_event` (§6) whether or not the name is allowlisted, and that check runs before
-`event_schema` is ever consulted. The settings write path (`PUT
-/api/v1/products/{product}/events`) refuses to save an entry naming `purchase`
-rather than saving one that would do nothing — the same reason §6 has a distinct reason for this
-case instead of leaving it to look, on the settings page, like any other custom event a customer
-could turn on.
+`heartbeat` install-property keys are also discovered. Its `license` key remains
+built in, and install-property value rules remain unchanged. Other built-ins retain
+fixed schemas: pageview, engagement and install take no props; app_updated takes
+from_version/to_version; click events take their fixed property; onboarding takes
+status/reason. Their unsupported keys still return `prop_not_allowlisted`.
+
+The following server-only names MUST be rejected `reserved_event` by public ingest
+and by optional event settings writes, regardless of a catalog entry:
+`purchase`, `payment`, `free_trial`, `trial_started`, `trial_converted`,
+`subscription_started`, `subscription_upgraded`, `subscription_downgraded`,
+`subscription_renewed`, `subscription_cancel_scheduled`, `subscription_reactivated`,
+`subscription_ended`. Automatic payment goals do not consume custom catalog slots.
 
 ## 8. Kill switch
 
