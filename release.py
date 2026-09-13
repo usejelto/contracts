@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import io
+import http.client
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -124,21 +125,42 @@ class HTTPSRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+DOWNLOAD_ATTEMPTS = 3
+DOWNLOAD_PAUSE = 2.0
+
+
 def download(url, missing=False):
+    """Fetch an HTTPS URL, retrying transient failures; a definite answer is never retried.
+
+    One connection reset from a release host must not fail a whole publication
+    (tauri 1.0.1's checks did, 2026-09-12). Network errors, timeouts, truncated
+    bodies and 5xx/429 answers are retried with backoff; 404 with missing=True
+    returns None at once, every other 4xx is raised at once, and the size bound
+    is not a retry.
+    """
     parsed = urllib.parse.urlsplit(url)
     if parsed.scheme != 'https' or parsed.username or parsed.password:
         raise ValueError('Expected an HTTPS URL without credentials')
     request = urllib.request.Request(url, headers={'User-Agent': 'jelto-release/0.1.0'})
-    try:
-        with urllib.request.build_opener(HTTPSRedirect()).open(request, timeout=60) as response:
-            data = response.read(100 * 1024 * 1024 + 1)
-            if len(data) > 100 * 1024 * 1024:
-                raise ValueError('Download exceeds 100 MiB')
-            return data
-    except urllib.error.HTTPError as error:
-        if missing and error.code == 404:
-            return None
-        raise
+    last = None
+    for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
+        try:
+            with urllib.request.build_opener(HTTPSRedirect()).open(request, timeout=60) as response:
+                data = response.read(100 * 1024 * 1024 + 1)
+                if len(data) > 100 * 1024 * 1024:
+                    raise ValueError('Download exceeds 100 MiB')
+                return data
+        except urllib.error.HTTPError as error:
+            if missing and error.code == 404:
+                return None
+            if error.code < 500 and error.code != 429:
+                raise
+            last = error
+        except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException) as error:
+            last = error
+        if attempt < DOWNLOAD_ATTEMPTS:
+            time.sleep(DOWNLOAD_PAUSE * attempt)
+    raise RuntimeError(f'Download failed after {DOWNLOAD_ATTEMPTS} attempts: {url} ({last})')
 
 
 def install_contracts(root):
@@ -405,7 +427,7 @@ def github_release(root, tag, repo):
                 '--prerelease=' + str('-' in record['version']).lower(), '--latest=' + str('-' not in record['version']).lower())
 
 
-def configure(root, repo, url=None, checksum=None, contracts_version='0.1.0'):
+def configure(root, repo, url=None, checksum=None, contracts_version='0.1.1'):
     repository(repo)
     settings = config(root)
     settings['repository'] = repo
@@ -535,7 +557,7 @@ def main():
     parser.add_argument('--repository', default=os.environ.get('GITHUB_REPOSITORY', ''))
     parser.add_argument('--contracts-url')
     parser.add_argument('--contracts-sha256')
-    parser.add_argument('--contracts-version', default='0.1.0')
+    parser.add_argument('--contracts-version', default='0.1.1')
     parser.add_argument('--kind', choices=['npm', 'cargo', 'nuget'])
     parser.add_argument('--registry', action='store_true')
     args = parser.parse_args()

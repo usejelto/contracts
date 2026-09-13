@@ -201,9 +201,43 @@ class ReleaseTests(unittest.TestCase):
     def test_transport_errors_are_not_missing_versions(self):
         error = urllib.error.HTTPError('https://example.com', 403, 'forbidden', {}, None)
         self.addCleanup(error.close)
-        with patch('urllib.request.OpenerDirector.open', side_effect=error):
+        with patch('urllib.request.OpenerDirector.open', side_effect=error) as opened, \
+                patch('release.time.sleep') as slept:
             with self.assertRaises(urllib.error.HTTPError):
                 release.download('https://example.com', missing=True)
+        # A definite client-side answer is final: no retry, no pause.
+        self.assertEqual(opened.call_count, 1)
+        slept.assert_not_called()
+
+    def test_transient_download_failures_are_retried_with_backoff_then_given_up(self):
+        class Response(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        reset = urllib.error.URLError(ConnectionResetError(104, 'Connection reset by peer'))
+        unavailable = urllib.error.HTTPError('https://example.com', 503, 'unavailable', {}, None)
+        self.addCleanup(unavailable.close)
+        with patch('urllib.request.OpenerDirector.open', side_effect=[reset, unavailable, Response(b'archive')]) as opened, \
+                patch('release.time.sleep') as slept:
+            self.assertEqual(release.download('https://example.com/file'), b'archive')
+        self.assertEqual(opened.call_count, 3)
+        self.assertEqual([call.args[0] for call in slept.call_args_list],
+                         [release.DOWNLOAD_PAUSE, release.DOWNLOAD_PAUSE * 2])
+        with patch('urllib.request.OpenerDirector.open', side_effect=[reset, reset, reset]) as opened, \
+                patch('release.time.sleep'):
+            with self.assertRaisesRegex(RuntimeError, 'Download failed after 3 attempts'):
+                release.download('https://example.com/file')
+        self.assertEqual(opened.call_count, 3)
+        missing = urllib.error.HTTPError('https://example.com', 404, 'missing', {}, None)
+        self.addCleanup(missing.close)
+        with patch('urllib.request.OpenerDirector.open', side_effect=missing) as opened, \
+                patch('release.time.sleep') as slept:
+            self.assertIsNone(release.download('https://example.com/file', missing=True))
+        self.assertEqual(opened.call_count, 1)
+        slept.assert_not_called()
 
     def test_artifact_record_cannot_omit_a_package(self):
         self.prepare()

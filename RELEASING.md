@@ -35,7 +35,7 @@ Electron, Swift, .NET and Tauri also need a published contracts archive:
 ~~~sh
 python3 "$JELTO_RELEASE_TOOL" configure \
   --repository ACTUAL_OWNER/ACTUAL_REPOSITORY \
-  --contracts-url https://github.com/ACTUAL_OWNER/jelto-contracts/releases/download/v0.1.0/jelto-contracts-0.1.0.zip \
+  --contracts-url https://github.com/ACTUAL_OWNER/jelto-contracts/releases/download/v0.1.1/jelto-contracts-0.1.1.zip \
   --contracts-sha256 ACTUAL_64_CHARACTER_SHA256
 ~~~
 
