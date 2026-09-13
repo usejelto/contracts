@@ -192,10 +192,17 @@ class PublishTests(unittest.TestCase):
         with self.assertRaisesRegex(tool.PackageError, 'already holds a different package'):
             self.publish()
         self.assertEqual(len(self.registry.pushes), 1)
-        # The same bytes from another commit are a different manifest: also a collision.
+        # The same bytes from a later commit publish nothing new: the artifact
+        # keeps the commit that first built it, and no sha tag is added for the
+        # later one.
         (self.root / 'dist/index.html').write_bytes(b'<html>')
-        with self.assertRaisesRegex(tool.PackageError, 'already holds a different package'):
-            self.publish(commit='b' * 40)
+        later = self.publish(commit='b' * 40)
+        self.assertTrue(later['reused'])
+        self.assertEqual(later['digest'], first['digest'])
+        self.assertEqual(later['commit'], COMMIT)
+        self.assertNotIn(f'ghcr.io/usejelto/docs-package:sha-{"b" * 40}', self.registry.tags)
+        self.assertEqual(json.loads((self.out / 'docs.json').read_text())['source_commit'], COMMIT)
+        self.assertEqual(len(self.registry.pushes), 1)
 
     def test_a_missing_sha_tag_is_added_to_a_matching_existing_artifact(self):
         first = self.publish()

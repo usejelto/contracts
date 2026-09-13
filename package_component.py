@@ -195,20 +195,28 @@ def resolve(name, tag, run):
     return found[-1]
 
 
-def same_artifact(name, found, manifest, archive, run):
-    """True when the artifact the registry holds is byte for byte this package."""
+def same_content(name, found, manifest, archive, run):
+    """The published manifest when the artifact the registry holds is this package's content.
+
+    The archive and every recorded field except the producer commit must match:
+    a later commit that builds byte-identical content publishes nothing new,
+    while changed content under the same version is a collision.
+    """
     with tempfile.TemporaryDirectory(prefix='jelto-package-existing-') as temp:
         oras(run, 'pull', f'{name}@{found}', '--output', temp)
         pulled_archive = Path(temp) / archive.name
         pulled_manifest = Path(temp) / f'{manifest["component"]}.json'
         if not pulled_archive.is_file() or not pulled_manifest.is_file():
-            return False
+            return None
         if sha256(pulled_archive) != manifest['archive_sha256']:
-            return False
+            return None
         try:
-            return json.loads(pulled_manifest.read_text()) == manifest
+            published = json.loads(pulled_manifest.read_text())
         except ValueError:
-            return False
+            return None
+        without_commit = {k: v for k, v in published.items() if k != 'source_commit'}
+        mine = {k: v for k, v in manifest.items() if k != 'source_commit'}
+        return published if without_commit == mine else None
 
 
 def publish(root, out, registry, repository=None, commit=None, image_spec='v1.1', run=subprocess.run):
@@ -227,12 +235,19 @@ def publish(root, out, registry, repository=None, commit=None, image_spec='v1.1'
                            f'artifacts; resolve that by hand')
     if digests:
         found = digests.pop()
-        if not same_artifact(name, found, manifest, archive, run):
+        published = same_content(name, found, manifest, archive, run)
+        if published is None:
             raise PackageError(f'{name}:{version} already holds a different package; a published version '
                                f'is immutable, so ship changed content under a new version')
-        for tag, present in existing.items():
-            if not present:
-                oras(run, 'tag', f'{name}@{found}', tag)
+        if published['source_commit'] == manifest['source_commit']:
+            # The same build from the same commit: complete its tags if one is missing.
+            for tag, present in existing.items():
+                if not present:
+                    oras(run, 'tag', f'{name}@{found}', tag)
+        # Otherwise a later commit produced identical content; the published
+        # artifact, which records the commit that first built it, stays as is.
+        manifest['source_commit'] = published['source_commit']
+        (out / f'{component}.json').write_text(json.dumps(manifest, indent=2) + '\n')
         reused = True
     else:
         oras(run, 'push', f'{name}:{",".join(tags)}',
