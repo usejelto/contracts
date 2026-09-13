@@ -256,6 +256,53 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(matches.call_count, 1)
             self.assertEqual(matches.call_args.args[1]['kind'], 'cargo')
 
+    def test_wait_awaits_the_install_index_after_the_bytes(self):
+        record = {'version': '1.0.1', 'packages': [{'kind': 'npm', 'name': '@jelto/crawler'}]}
+        with patch.object(release, 'verify', return_value=record), \
+                patch.object(release, 'registry_matches', return_value=True), \
+                patch.object(release, 'registry_indexed', side_effect=[False, False, True]) as indexed, \
+                patch.object(release.time, 'sleep') as sleep:
+            release.registry_status(self.root, 'v1.0.1', self.repo, wait=True)
+            self.assertEqual(indexed.call_count, 3)
+            self.assertEqual(sleep.call_count, 2)
+        with patch.object(release, 'verify', return_value=record), \
+                patch.object(release, 'registry_matches', return_value=True), \
+                patch.object(release, 'registry_indexed', return_value=False), \
+                patch.object(release.time, 'sleep'):
+            with self.assertRaisesRegex(ValueError, 'indexing timed out'):
+                release.registry_status(self.root, 'v1.0.1', self.repo, wait=True)
+        # status answers about the bytes alone: a published, not yet indexed version exists.
+        with patch.object(release, 'verify', return_value=record), \
+                patch.object(release, 'registry_matches', return_value=True), \
+                patch.object(release, 'registry_indexed') as indexed:
+            release.registry_status(self.root, 'v1.0.1', self.repo, wait=False)
+            indexed.assert_not_called()
+
+    def test_registry_indexed_reads_what_each_installer_resolves(self):
+        bodies = {
+            'https://registry.npmjs.org/%40jelto%2Fcrawler': json.dumps({'versions': {'1.0.0': {}, '1.0.1': {}}}).encode(),
+            'https://index.crates.io/ta/ur/tauri-plugin-jelto':
+                b'{"name":"tauri-plugin-jelto","vers":"1.0.0"}\n{"name":"tauri-plugin-jelto","vers":"1.0.1"}\n',
+            'https://api.nuget.org/v3-flatcontainer/jelto/index.json': json.dumps({'versions': ['0.1.0']}).encode(),
+        }
+        calls = []
+
+        def fake(url, missing=False, accept=None):
+            calls.append((url, missing, accept))
+            return bodies.get(url)
+
+        with patch.object(release, 'download', side_effect=fake):
+            self.assertTrue(release.registry_indexed({'kind': 'npm', 'name': '@jelto/crawler'}, '1.0.1'))
+            self.assertFalse(release.registry_indexed({'kind': 'npm', 'name': '@jelto/crawler'}, '1.0.2'))
+            self.assertTrue(release.registry_indexed({'kind': 'cargo', 'name': 'tauri-plugin-jelto'}, '1.0.1'))
+            self.assertFalse(release.registry_indexed({'kind': 'cargo', 'name': 'tauri-plugin-jelto'}, '1.0.2'))
+            self.assertTrue(release.registry_indexed({'kind': 'nuget', 'name': 'Jelto'}, '0.1.0'))
+            self.assertFalse(release.registry_indexed({'kind': 'nuget', 'name': 'Jelto'}, '0.1.1'))
+            self.assertFalse(release.registry_indexed({'kind': 'npm', 'name': '@jelto/missing'}, '1.0.0'))
+        self.assertTrue(all(missing for _, missing, _ in calls))
+        self.assertEqual(calls[0][2], 'application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8, */*')
+        self.assertIsNone(calls[2][2])
+
     def test_completed_release_requires_all_registries(self):
         self.prepare()
         with patch.object(release, 'registry_data', return_value=None), self.assertRaisesRegex(ValueError, 'not available'):

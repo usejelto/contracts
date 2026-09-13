@@ -129,7 +129,7 @@ DOWNLOAD_ATTEMPTS = 3
 DOWNLOAD_PAUSE = 2.0
 
 
-def download(url, missing=False):
+def download(url, missing=False, accept=None):
     """Fetch an HTTPS URL, retrying transient failures; a definite answer is never retried.
 
     One connection reset from a release host must not fail a whole publication
@@ -141,7 +141,10 @@ def download(url, missing=False):
     parsed = urllib.parse.urlsplit(url)
     if parsed.scheme != 'https' or parsed.username or parsed.password:
         raise ValueError('Expected an HTTPS URL without credentials')
-    request = urllib.request.Request(url, headers={'User-Agent': 'jelto-release/0.1.0'})
+    headers = {'User-Agent': 'jelto-release/0.1.0'}
+    if accept:
+        headers['Accept'] = accept
+    request = urllib.request.Request(url, headers=headers)
     last = None
     for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
         try:
@@ -357,6 +360,35 @@ def registry_data(item, value):
     return None
 
 
+def registry_indexed(item, value):
+    """Whether the registry's install path resolves this version yet.
+
+    The immutable bytes registry_data reads appear seconds to minutes before the
+    index installers resolve: npm's abbreviated packument, the crates.io sparse
+    index and NuGet's flat-container version list. Waiting on the bytes alone sent
+    the installation check after a version the registry did not list yet
+    (crawler and analytics 1.0.1: npm ETARGET; tauri 1.0.0: Cargo "did not match
+    any packages"), so every first tag run needed a second dispatch.
+    """
+    name = item['name']
+    if item['kind'] == 'npm':
+        # The representation npm's resolver requests; the CDN caches it on its own.
+        data = download('https://registry.npmjs.org/' + urllib.parse.quote(name, safe=''), missing=True,
+                        accept='application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8, */*')
+        return data is not None and value in json.loads(data).get('versions', {})
+    if item['kind'] == 'cargo':
+        lower = name.lower()
+        prefix = {1: '1', 2: '2', 3: '3/' + lower[0]}.get(len(lower), lower[:2] + '/' + lower[2:4])
+        data = download('https://index.crates.io/' + prefix + '/' + lower, missing=True)
+        return data is not None and any(
+            json.loads(line)['vers'] == value for line in data.decode().splitlines() if line.strip())
+    if item['kind'] == 'nuget':
+        lower = name.lower()
+        data = download('https://api.nuget.org/v3-flatcontainer/' + lower + '/index.json', missing=True)
+        return data is not None and value.lower() in json.loads(data).get('versions', [])
+    return True
+
+
 def registry_matches(folder, item, value):
     data = registry_data(item, value)
     if data is None:
@@ -375,13 +407,16 @@ def registry_status(root, tag, repo, wait=False, kind=None):
     for item in record['packages']:
         if item['kind'] == 'zip' or (kind and item['kind'] != kind):
             continue
-        exists = False
+        exists = ready = False
         for attempt in range(30 if wait else 1):
             exists = registry_matches(root / 'release-artifacts', item, record['version'])
-            if exists or not wait:
+            # The installation check follows a wait, so a wait also needs the index installers
+            # resolve; status keeps answering about the bytes, which decide whether to publish.
+            ready = exists and (not wait or registry_indexed(item, record['version']))
+            if ready or not wait:
                 break
             time.sleep(10)
-        if wait and not exists:
+        if wait and not ready:
             raise ValueError('Registry indexing timed out: ' + item['name'])
         line = item['kind'] + '_exists=' + str(exists).lower() + '\n'
         if os.environ.get('GITHUB_OUTPUT'):
