@@ -137,7 +137,7 @@ category_labels:
 # Fixed order for the source donut — CVD-validated adjacency; never size-ordered.
 donut_order: [search, ai, community, social, email, site, direct, other, spam]
 
-# utm_source shorthands → canonical label, matched case-insensitively on READ, so a tagged
+# utm_source names and hostnames → canonical label, matched case-insensitively on READ, so a tagged
 # source merges with its referrer-derived twin. Plausible keeps the same list in custom_sources.json.
 aliases:
   ig: Instagram
@@ -160,10 +160,53 @@ aliases:
   google: Google
   bing: Bing
   ddg: DuckDuckGo
-  chatgpt: ChatGPT
   substack: Substack
   newsletter: Newsletter
   email: Email
+
+  # AI assistant tags need explicit aliases even when ref_host is recognised:
+  # a non-empty UTM source wins over ref_host. Keep the short names and known
+  # hostnames in the same AI bucket. These are exact tag matches, not substring
+  # rules: custom campaign names containing an AI brand stay unchanged.
+  chatgpt: ChatGPT
+  chatgpt.com: ChatGPT
+  www.chatgpt.com: ChatGPT
+  chat.openai.com: ChatGPT
+  openai: ChatGPT
+  openai.com: ChatGPT
+  www.openai.com: ChatGPT
+  perplexity: Perplexity
+  perplexity.ai: Perplexity
+  www.perplexity.ai: Perplexity
+  claude: Claude
+  claude.ai: Claude
+  anthropic: Claude
+  anthropic.com: Claude
+  www.anthropic.com: Claude
+  gemini: Gemini
+  gemini.google.com: Gemini
+  bard: Gemini
+  bard.google.com: Gemini
+  copilot: Microsoft Copilot
+  copilot.microsoft.com: Microsoft Copilot
+  microsoft copilot: Microsoft Copilot
+  deepseek: DeepSeek
+  deepseek.com: DeepSeek
+  www.deepseek.com: DeepSeek
+  chat.deepseek.com: DeepSeek
+  grok: Grok
+  grok.com: Grok
+  you.com: You.com
+  www.you.com: You.com
+  poe: Poe
+  poe.com: Poe
+  mistral: Mistral (Le Chat)
+  mistral.ai: Mistral (Le Chat)
+  chat.mistral.ai: Mistral (Le Chat)
+  lechat: Mistral (Le Chat)
+  le-chat: Mistral (Le Chat)
+  le chat: Mistral (Le Chat)
+  mistral (le chat): Mistral (Le Chat)
 
 # Categories for the alias targets that NO referrer host produces, so the label -> category map
 # built from `exact_hosts` and `signatures` cannot supply them. Every key here MUST be an alias
