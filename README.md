@@ -89,8 +89,7 @@ Questions, bug reports and documentation improvements are welcome. See
 [Contributing](https://github.com/usejelto/contracts/blob/main/CONTRIBUTING.md),
 [Code of Conduct](https://github.com/usejelto/contracts/blob/main/CODE_OF_CONDUCT.md), and
 [Security policy](https://github.com/usejelto/contracts/blob/main/SECURITY.md).
-Until the public repository is available, these files are also included in the
-source root; contact [taha@jelto.io](mailto:taha@jelto.io) for help.
+Contact [taha@jelto.io](mailto:taha@jelto.io) for anything else.
 
 Jelto-owned software and associated documentation use the [MIT license](LICENSE).
 Third-party materials retain their own terms, including the Contributor Covenant
