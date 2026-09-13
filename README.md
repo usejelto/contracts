@@ -14,6 +14,9 @@ backend or any SDK checkout. Version 0.1.0 is prepared for its first public rele
 - `spec/signatures/`: versioned bot, source and referrer-spam catalogs.
 - `spec/contracts/manifest.json`: package identity, version and export allowlist.
 - `package.py`, `install.py`, `tests/`: deterministic packaging and verified installation.
+- `package_component.py`: the shared tool the docs, frontend and snippet repositories
+  consume to build and publish their component packages (archive + manifest) to the
+  organization registry from a checked-in `component-package.json`.
 
 Backend domain specs, OpenAPI definitions, database migrations, billing/query
 logic and domain fixture expectations stay with the backend. References to
