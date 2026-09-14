@@ -1,0 +1,38 @@
+c: C24
+title: explicit updater stages use track without changing the version baseline
+implements: spec/sdk-conformance.md §7; spec/wire-v1.md §4
+arms:
+  - name: all stages and a repeated observation
+    env: {JELTO_NOW: "1788134400000", JELTO_APP_VERSION: "2.0.0"}
+    steps:
+      - run:
+          - init prd_conform001
+          - track app_update {"from_version":"2.0.0","to_version":"2.1.0","status":"download_started"}
+          - track app_update {"from_version":"2.0.0","to_version":"2.1.0","status":"downloaded"}
+          - track app_update {"from_version":"2.0.0","to_version":"2.1.0","status":"install_started"}
+          - track app_update {"from_version":"2.0.0","to_version":"2.1.0","status":"download_failed","reason":"network"}
+          - track app_update {"from_version":"2.0.0","to_version":"2.1.0","status":"install_failed","reason":"permission"}
+          - track app_update {"from_version":"2.0.0","to_version":"2.1.0","status":"failed","reason":"unknown"}
+          - track app_update {"from_version":"2.0.0","to_version":"2.1.0","status":"postponed","reason":"remind_later"}
+          - track app_update {"from_version":"2.0.0","to_version":"2.1.0","status":"download_started"}
+          - sleep 6000
+    assert:
+      - {check: event_names, counts: {heartbeat: 1, app_update: 8}}
+      - {check: update_activity, values: [download_started, downloaded, install_started, download_failed, install_failed, failed, postponed, download_started]}
+      - {check: state, path: last_app_version, value: '"2.0.0"'}
+      - {check: event_prop, request: 0, event: 5, key: reason, value: permission}
+  - name: failed delivery preserves the observation
+    env: {JELTO_NOW: "1788134400000", JELTO_APP_VERSION: "2.0.0"}
+    mock: "503"
+    steps:
+      - run:
+          - init prd_conform001
+          - track app_update {"from_version":"2.0.0","to_version":"2.1.0","status":"install_failed","reason":"permission"}
+          - sleep 3000
+          - sleep 4000
+          - sleep 6000
+    assert:
+      - {check: request_count, min: 2}
+      - {check: stable_ids}
+      - {check: update_activity, values: [install_failed]}
+      - {check: state, path: last_app_version, value: '"2.0.0"'}

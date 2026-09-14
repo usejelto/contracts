@@ -45,7 +45,7 @@
       ]
     },
     "url": {
-      "$comment": "\u00a75.1: absolute `http(s)` with a NON-EMPTY host. The scheme is matched case-insensitively because RFC 3986 \u00a73.1 makes schemes case-insensitive and net/url lower-cases them, so the server accepts `HTTPS://`. The pattern approximates RFC 3986 reg-name syntax; net/url additionally tolerates a raw `<`, `\"` or `]` inside a host, which this pattern rejects and which no sender emits.",
+      "$comment": "§5.1: absolute `http(s)` with a NON-EMPTY host. The scheme is matched case-insensitively because RFC 3986 §3.1 makes schemes case-insensitive and net/url lower-cases them, so the server accepts `HTTPS://`. The pattern approximates RFC 3986 reg-name syntax; net/url additionally tolerates a raw `<`, `\"` or `]` inside a host, which this pattern rejects and which no sender emits.",
       "type": "string",
       "maxLength": 2048,
       "pattern": "^[hH][tT][tT][pP][sS]?://([^/?#@]*@)?(\\[[0-9A-Fa-f:.]+\\]|(%[89A-Fa-f][0-9A-Fa-f]|[^\\x00-\\x20\"%/<>?#@\\[\\]\\\\^`{|}:])+)(:[0-9]*)?([/?#]|$)",
@@ -65,19 +65,19 @@
       ]
     },
     "calendarDay": {
-      "$comment": "\u00a75.1 `fd` is a DAY, not a shape: the server parses it with time.Parse, so 2026-02-30 and 2026-02-29 are rejected. The pattern is leap-year accurate.",
+      "$comment": "§5.1 `fd` is a DAY, not a shape: the server parses it with time.Parse, so 2026-02-30 and 2026-02-29 are rejected. The pattern is leap-year accurate.",
       "type": "string",
       "format": "date",
       "maxLength": 10,
       "pattern": "^(?:\\d{4}-(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|\\d{4}-(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|\\d{4}-02-(?:0[1-9]|1\\d|2[0-8])|(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:[02468][048]|[13579][26])00)-02-29)$"
     },
     "cookieVisitorID": {
-      "$comment": "\u00a75.1 `vid`: the cookie-mode identifier, 16 random bytes in base64url. The pattern is deliberately one a UUID CANNOT satisfy -- boundary 2 of spec/snippet.md \u00a77 forbids the web cookie id and `install_id` meeting, and a grammar that cannot express a UUID makes that checkable here rather than in identity.go. The empty alternative is \u00a75.1's `an empty X is an absent X`, which the parser has for `f`, `a` and `v`; rev 0.15 exists because this schema was once stricter than the parser on exactly that.",
+      "$comment": "§5.1 `vid`: the cookie-mode identifier, 16 random bytes in base64url. The pattern is deliberately one a UUID CANNOT satisfy -- boundary 2 of spec/snippet.md §7 forbids the web cookie id and `install_id` meeting, and a grammar that cannot express a UUID makes that checkable here rather than in identity.go. The empty alternative is §5.1's `an empty X is an absent X`, which the parser has for `f`, `a` and `v`; rev 0.15 exists because this schema was once stricter than the parser on exactly that.",
       "type": "string",
       "pattern": "^$|^[A-Za-z0-9_-]{22}$"
     },
     "firstTouch": {
-      "$comment": "An empty optional string is an absent one to the server (\u00a75.1) -- optionalString returns \"\" and the parser skips the pattern, exactly as `r` treats \"\".",
+      "$comment": "An empty optional string is an absent one to the server (§5.1) -- optionalString returns \"\" and the parser skips the pattern, exactly as `r` treats \"\".",
       "type": "string",
       "maxLength": 200,
       "anyOf": [
@@ -90,7 +90,7 @@
       ]
     },
     "appSlug": {
-      "$comment": "\u00a75.2 `a`; \"\" is absent, and an absent slug falls back to `os`.",
+      "$comment": "§5.2 `a`; \"\" is absent, and an absent slug falls back to `os`.",
       "type": "string",
       "maxLength": 32,
       "anyOf": [
@@ -130,7 +130,7 @@
         "s"
       ],
       "additionalProperties": true,
-      "$comment": "Common \u00a73 fields only; every surface field is in the allOf below.",
+      "$comment": "Common §3 fields only; every surface field is in the allOf below.",
       "properties": {
         "id": {
           "$ref": "#/$defs/nonNilUuid"
@@ -140,7 +140,7 @@
           "pattern": "^[a-z0-9_:.-]{1,64}$"
         },
         "t": {
-          "$comment": "\u00a73 clamps EVERY `t` -- outside [ingest_ts - 30 d, ingest_ts + 5 min] it becomes `ingest_ts` -- so no bound belongs here. `minimum: 0` contradicted spec/sdk-conformance.md C15, which forbids an SDK correcting its own clock: a host clock set before 1970 made a conformance run fail a body the server stores. `type: integer` stays, and since rev 0.16 the parser agrees with what it means: a whole NUMBER, zero fraction and exponent form included, saturating outside int64 rather than rejecting.",
+          "$comment": "§3 clamps EVERY `t` -- outside [ingest_ts - 30 d, ingest_ts + 5 min] it becomes `ingest_ts` -- so no bound belongs here. `minimum: 0` contradicted spec/sdk-conformance.md C15, which forbids an SDK correcting its own clock: a host clock set before 1970 made a conformance run fail a body the server stores. `type: integer` stays, and since rev 0.16 the parser agrees with what it means: a whole NUMBER, zero fraction and exponent form included, saturating outside int64 rather than rejecting.",
           "type": "integer"
         },
         "s": {
@@ -157,7 +157,7 @@
           "default": true
         },
         "v": {
-          "$comment": "\u00a73 `v`, normative prose since rev 0.16 -- this pattern used to live only here, so the server applied nothing and stored `1.2.0` and `Electron/1.0` in a LowCardinality column nothing folds. An empty `v` is an ABSENT `v`, \u00a75.1 `f` and \u00a75.2 `a`'s rule, which is why `\"\"` is accepted beside the pattern rather than excluded by its `{1,24}` tail.",
+          "$comment": "§3 `v`, normative prose since rev 0.16 -- this pattern used to live only here, so the server applied nothing and stored `1.2.0` and `Electron/1.0` in a LowCardinality column nothing folds. An empty `v` is an ABSENT `v`, §5.1 `f` and §5.2 `a`'s rule, which is why `\"\"` is accepted beside the pattern rather than excluded by its `{1,24}` tail.",
           "type": "string",
           "maxLength": 32,
           "anyOf": [
@@ -176,7 +176,7 @@
       },
       "allOf": [
         {
-          "$comment": "\u00a75.1 web surface fields.",
+          "$comment": "§5.1 web surface fields.",
           "if": {
             "required": [
               "s"
@@ -207,7 +207,7 @@
                 "$ref": "#/$defs/uuid"
               },
               "e": {
-                "$comment": "\u00a75.1: `e` is clamped to [0, 1 800 000], and a larger value \"is clamped, not rejected\" -- enrich.go's `clamp` is what implements it. The bounds here rejected events the server stores, so the schema was the outlier and they are gone at rev 0.16.",
+                "$comment": "§5.1: `e` is clamped to [0, 1 800 000], and a larger value \"is clamped, not rejected\" -- enrich.go's `clamp` is what implements it. The bounds here rejected events the server stores, so the schema was the outlier and they are gone at rev 0.16.",
                 "type": "integer"
               },
               "sd": {
@@ -228,7 +228,7 @@
             },
             "allOf": [
               {
-                "$comment": "\u00a75.1 `fd`: MUST if `f`, and only then is it read as a day.",
+                "$comment": "§5.1 `fd`: MUST if `f`, and only then is it read as a day.",
                 "if": {
                   "required": [
                     "f"
@@ -255,7 +255,7 @@
           }
         },
         {
-          "$comment": "\u00a75.2 app surface fields.",
+          "$comment": "§5.2 app surface fields.",
           "if": {
             "required": [
               "s"
@@ -308,7 +308,7 @@
           }
         },
         {
-          "$comment": "\u00a74: `pageview` is a web event.",
+          "$comment": "§4: `pageview` is a web event.",
           "if": {
             "required": [
               "n"
@@ -328,7 +328,7 @@
           }
         },
         {
-          "$comment": "\u00a74: `click:download` is a web event carrying the file basename.",
+          "$comment": "§4: `click:download` is a web event carrying the file basename.",
           "if": {
             "required": [
               "n"
@@ -362,7 +362,7 @@
           }
         },
         {
-          "$comment": "\u00a74: `click:outbound` is a web event carrying the outbound hostname.",
+          "$comment": "§4: `click:outbound` is a web event carrying the outbound hostname.",
           "if": {
             "required": [
               "n"
@@ -396,7 +396,7 @@
           }
         },
         {
-          "$comment": "\u00a74/\u00a75.1: `engagement`. `pv` is the `id` of a pageview and \u00a73 forbids a nil `id`.",
+          "$comment": "§4/§5.1: `engagement`. `pv` is the `id` of a pageview and §3 forbids a nil `id`.",
           "if": {
             "required": [
               "n"
@@ -425,7 +425,7 @@
           }
         },
         {
-          "$comment": "\u00a74: `heartbeat` is an app event; its install properties are strings matching `^[a-z0-9_.-]{1,24}$`, `license` included. At rev 0.16 \u00a74 moved onto that same grammar (W10) and its unenforced five-key cap became \u00a73's twenty (W9), which `$defs/props` already states as `maxProperties`. This branch was already right on both counts and is unchanged.",
+          "$comment": "§4: `heartbeat` is an app event; its install properties are strings matching `^[a-z0-9_.-]{1,24}$`, `license` included. At rev 0.16 §4 moved onto that same grammar (W10) and its unenforced five-key cap became §3's twenty (W9), which `$defs/props` already states as `maxProperties`. This branch was already right on both counts and is unchanged.",
           "if": {
             "required": [
               "n"
@@ -451,7 +451,7 @@
           }
         },
         {
-          "$comment": "\u00a74: `install` is an app event.",
+          "$comment": "§4: `install` is an app event.",
           "if": {
             "required": [
               "n"
@@ -471,7 +471,7 @@
           }
         },
         {
-          "$comment": "\u00a74: the `onboarding:` namespace is app-only.",
+          "$comment": "§4: the `onboarding:` namespace is app-only.",
           "if": {
             "required": [
               "n"
@@ -516,7 +516,7 @@
           }
         },
         {
-          "$comment": "\u00a74: automatic app version transition, fixed properties and required stable event ID.",
+          "$comment": "§4: automatic app version transition, fixed properties and required stable event ID.",
           "if": {
             "required": [
               "n"
@@ -562,7 +562,7 @@
           }
         },
         {
-          "$comment": "\u00a74: explicit updater activity, fixed properties and a stable event ID.",
+          "$comment": "§4: explicit updater activity, fixed properties and a stable event ID.",
           "if": {
             "required": [
               "n"

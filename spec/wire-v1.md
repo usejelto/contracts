@@ -344,7 +344,8 @@ returns retryable HTTP 503 and MUST NOT consume the failing event's ID.
 `heartbeat` install-property keys are also discovered. Its `license` key remains
 built in, and install-property value rules remain unchanged. Other built-ins retain
 fixed schemas: pageview, engagement and install take no props; app_updated takes
-from_version/to_version; click events take their fixed property; onboarding takes
+from_version/to_version; app_update takes from_version/to_version/status and an
+optional reason; click events take their fixed property; onboarding takes
 status/reason. Their unsupported keys still return `prop_not_allowlisted`.
 
 The following server-only names MUST be rejected `reserved_event` by public ingest
