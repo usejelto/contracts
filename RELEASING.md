@@ -54,6 +54,21 @@ example manifest/lockfiles; its wire version comes from Cargo. Initial Tauri is
 Run normal component CI on main before tagging. SwiftPM resolves a public version
 tag immediately; a GitHub Release cannot gate tag visibility.
 
+Before the first automated tag of a package, and whenever a release is about to
+be cut, ask the helper what the tag push will need:
+
+~~~sh
+python3 "$JELTO_RELEASE_TOOL" doctor
+~~~
+
+It reports RELEASE_PUBLISH_ENABLED, the release environment, NUGET_USER for
+.NET, and for each registry whether a version already published through
+trusted publishing proves the policy is in place. No registry exposes its
+trusted-publisher policy itself, so a package whose versions were all
+published by hand shows a warning with the settings page to configure; that
+missing policy is what turned electron 1.0.1's first tag run into an npm
+authentication failure (2026-09-14).
+
 ## First publication
 
 1. Leave RELEASE_PUBLISH_ENABLED unset. Push an unused matching version tag, such
@@ -117,23 +132,34 @@ to avoid moving latest backward.
 
 ## Reruns and recovery
 
-Rerun or dispatch the same tag; never move it to fix a failed release. Publication
-checks registry contents before skipping an existing version. Only a 404 counts
-as absent; authorization and network errors fail. The wait before the installation
-check needs both the immutable bytes and the index installers resolve (npm's
-abbreviated packument, the crates.io sparse index, NuGet's flat-container version
-list): the bytes appear seconds to minutes before the index, and a published version
-the index does not list yet is awaited, not failed. NuGet comparison excludes the
-repository-added signature, while npm and Cargo comparisons require exact bytes.
-Conflicting bytes require investigation and a new version, not overwriting.
+Rerun or dispatch the same tag; never move it to fix a failed release. A rerun
+first looks for an earlier run of the workflow on the same commit whose checks
+all passed and whose release artifacts have not expired; when there is one, the
+checks are skipped and publication reads that run's artifacts, and the verify
+step still checks their recorded tag, repository and commit against the checkout.
+Publication checks registry contents before skipping an existing version. Only a
+404 counts as absent; authorization and network errors fail. The wait before the
+installation check needs both the immutable bytes and the index installers
+resolve (npm's abbreviated packument, the crates.io sparse index, NuGet's
+flat-container version list): the bytes appear seconds to minutes before the
+index, and a published version the index does not list yet is awaited for up to
+a quarter of an hour with a growing pause, not failed (npm took over ten minutes
+for tauri 1.0.2). NuGet comparison excludes the repository-added signature, while
+npm and Cargo comparisons require exact bytes. Conflicting bytes require
+investigation and a new version, not overwriting.
 
 Tauri registries are not atomic. If Rust succeeds and npm fails, fix authentication
 or registry availability and rerun the same tag. The matching Rust version is
 retained; npm finishes next. A GitHub Release is completed only after both
 packages pass registry content and installation checks.
 
-GitHub Releases are assembled as drafts. Matching assets can be reused on rerun;
-different bytes are never replaced. CHECKSUMS and release.json record what was
+GitHub Releases are assembled as drafts, opened before anything is published to a
+registry, so a rerun only uploads assets and publishes the draft. When the
+workflow token cannot open the draft (a `workflow_dispatch` run got "HTTP 403:
+Resource not accessible by integration" on 2026-09-14 where every tag-push run had
+succeeded), the run stops before publishing and prints the one `gh api` command
+that opens the draft by hand; rerun the tag after it. Matching assets can be
+reused on rerun; different bytes are never replaced. CHECKSUMS and release.json record what was
 verified. CI artifacts expire after 14 days; completed GitHub Release assets are
 the durable downloads. Fix any source problem in a new tag, and retain published
 versions for existing customers.

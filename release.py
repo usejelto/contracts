@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -300,15 +301,8 @@ def stage(root, tag, repo):
         (output / (item['file'] + '.sha256')).write_text(item['sha256'] + '  ' + item['file'] + '\n')
 
 
-def verify(root, tag, repo):
-    validate(root, tag, repo)
-    folder = root / 'release-artifacts'
-    record = json.loads((folder / 'release.json').read_text())
-    if (record['tag'], record['repository'], record['commit']) != (tag, repo, run('git', 'rev-parse', 'HEAD', cwd=root)):
-        raise ValueError('Artifact source identity mismatch')
-    if record['component'] != identity(root)[0] or record['version'] != tag[1:]:
-        raise ValueError('Artifact component/version mismatch')
-    component, value = record['component'], record['version']
+def required_packages(component, value):
+    """The (kind, registry name, file) triples a component's release ships."""
     required = set()
     if component in {'analytics', 'crawler', 'electron', 'tauri'}:
         required.add(('npm', '@jelto/' + component, 'jelto-' + component + '-' + value + '.tgz'))
@@ -318,6 +312,19 @@ def verify(root, tag, repo):
         required.add(('nuget', 'Jelto', 'Jelto.' + value + '.nupkg'))
     elif component in {'swift', 'contracts'}:
         required.add(('zip', 'jelto-' + component, 'jelto-' + component + '-' + value + '.zip'))
+    return required
+
+
+def verify(root, tag, repo):
+    validate(root, tag, repo)
+    folder = root / 'release-artifacts'
+    record = json.loads((folder / 'release.json').read_text())
+    if (record['tag'], record['repository'], record['commit']) != (tag, repo, run('git', 'rev-parse', 'HEAD', cwd=root)):
+        raise ValueError('Artifact source identity mismatch')
+    if record['component'] != identity(root)[0] or record['version'] != tag[1:]:
+        raise ValueError('Artifact component/version mismatch')
+    component, value = record['component'], record['version']
+    required = required_packages(component, value)
     if (len(record['packages']) != len(required)
             or {(item['kind'], item['name'], item['file']) for item in record['packages']} != required):
         raise ValueError('Release packages do not match the component')
@@ -402,20 +409,28 @@ def registry_matches(folder, item, value):
     return True
 
 
+# A registry lists a published version seconds to minutes after it holds the
+# bytes; npm took over ten minutes for @jelto/tauri 1.0.2 (2026-09-14), past the
+# earlier five-minute wait, and that run had to be dispatched again for nothing.
+# A quarter of an hour with a growing pause covers what has been observed.
+WAIT_PAUSES = [10, 15, 20, 30, 45] + [60] * 13
+
+
 def registry_status(root, tag, repo, wait=False, kind=None):
     record = verify(root, tag, repo)
     for item in record['packages']:
         if item['kind'] == 'zip' or (kind and item['kind'] != kind):
             continue
         exists = ready = False
-        for attempt in range(30 if wait else 1):
+        pauses = WAIT_PAUSES if wait else []
+        for attempt in range(len(pauses) + 1):
             exists = registry_matches(root / 'release-artifacts', item, record['version'])
             # The installation check follows a wait, so a wait also needs the index installers
             # resolve; status keeps answering about the bytes, which decide whether to publish.
             ready = exists and (not wait or registry_indexed(item, record['version']))
-            if ready or not wait:
+            if ready or attempt == len(pauses):
                 break
-            time.sleep(10)
+            time.sleep(pauses[attempt])
         if wait and not ready:
             raise ValueError('Registry indexing timed out: ' + item['name'])
         line = item['kind'] + '_exists=' + str(exists).lower() + '\n'
@@ -425,26 +440,72 @@ def registry_status(root, tag, repo, wait=False, kind=None):
         print(line, end='')
 
 
+def invoke(*args):
+    """Run a command and return its completed process; unlike run(), a failure is reported, not raised."""
+    return subprocess.run([shutil.which(args[0]) or args[0], *map(str, args[1:])], capture_output=True, text=True)
+
+
+def gh_json(*args):
+    return json.loads(run('gh', 'api', *args))
+
+
+def find_release(tag, repo):
+    """The GitHub Release for this tag, draft or published, or None."""
+    releases = gh_json('--paginate', '--slurp', 'repos/' + repo + '/releases')
+    return next((r for page in releases for r in page if r['tag_name'] == tag), None)
+
+
+def release_notes(record):
+    return ('Source: ' + record['commit'] + '\n\nComponent CI, package checks and conformance twice passed.'
+            '\n\nPublished artifacts and SHA-256 checksums are attached. '
+            'For bootstrap, publish only these verified packages from this exact tag.\n')
+
+
+def github_draft(root, tag, repo):
+    """Open the GitHub Release as a draft before anything immutable is published.
+
+    Creating the release is the one step a rerun could not always repeat: on
+    2026-09-14 electron v1.0.1 and tauri v1.0.2 got "HTTP 403: Resource not
+    accessible by integration" from workflow_dispatch runs, while every tag-push
+    run had opened its draft. Opening the draft first, before any registry
+    receives bytes, leaves a later dispatch only assets to upload and the draft
+    to publish; and when the token cannot open it, the run stops before it has
+    published anything and prints the one command that opens the draft by hand.
+    """
+    record = verify(root, tag, repo)
+    existing = find_release(tag, repo)
+    if existing is not None:
+        if existing['target_commitish'] not in {record['commit'], 'main'}:
+            raise ValueError('Existing GitHub Release source differs')
+        print('GitHub Release ' + ('draft ' if existing['draft'] else '') + 'exists: ' + tag)
+        return existing
+    args = ['gh', 'release', 'create', tag, '--repo', repo, '--verify-tag', '--draft',
+            '--target', record['commit'], '--title', tag, '--notes', release_notes(record)]
+    if '-' in record['version']:
+        args.append('--prerelease')
+    result = invoke(*args)
+    if result.returncode:
+        detail = (result.stderr or result.stdout or '').strip()
+        if 'HTTP 403' in detail:
+            raise ValueError(
+                detail + '\n\nThe workflow token could not open the draft release. Open it once by hand, '
+                'then rerun this tag; the rerun uploads the assets and publishes the draft:\n'
+                '  gh api -X POST repos/' + repo + '/releases -f tag_name=' + tag
+                + ' -f target_commitish=' + record['commit'] + ' -f name=' + tag
+                + ' -F draft=true -f body=' + shlex.quote('Source: ' + record['commit']))
+        raise ValueError(detail or ('gh release create failed with status ' + str(result.returncode)))
+    print('GitHub Release draft opened: ' + tag)
+    return find_release(tag, repo)
+
+
 def github_release(root, tag, repo):
     record = verify(root, tag, repo)
     # A partially completed registry release must never become a completed GitHub Release.
     for item in record['packages']:
         if item['kind'] != 'zip' and not registry_matches(root / 'release-artifacts', item, record['version']):
             raise ValueError('Registry package is not available: ' + item['name'])
-    releases = json.loads(run('gh', 'api', '--paginate', '--slurp', 'repos/' + repo + '/releases'))
-    existing = next((r for page in releases for r in page if r['tag_name'] == tag), None)
+    github_draft(root, tag, repo)
     folder = root / 'release-artifacts'
-    body = ('Source: ' + record['commit'] + '\n\nComponent CI, package checks and conformance twice passed.'
-            '\n\nPublished artifacts and SHA-256 checksums are attached. '
-            'For bootstrap, publish only these verified packages from this exact tag.\n')
-    if existing is None:
-        args = ['gh', 'release', 'create', tag, '--repo', repo, '--verify-tag', '--draft',
-                '--target', record['commit'], '--title', tag, '--notes', body]
-        if '-' in record['version']:
-            args.append('--prerelease')
-        run(*args)
-    elif existing['target_commitish'] not in {record['commit'], 'main'}:
-        raise ValueError('Existing GitHub Release source differs')
     with tempfile.TemporaryDirectory(prefix='jelto-release-assets-') as temp:
         details = json.loads(run('gh', 'release', 'view', tag, '--repo', repo, '--json', 'assets,isDraft'))
         assets = {a['name']: a for a in details['assets']}
@@ -460,6 +521,99 @@ def github_release(root, tag, repo):
         if details['isDraft']:
             run('gh', 'release', 'edit', tag, '--repo', repo, '--draft=false',
                 '--prerelease=' + str('-' in record['version']).lower(), '--latest=' + str('-' not in record['version']).lower())
+
+
+def previous_run(repo, sha, workflow_file, current):
+    """An earlier completed run of this workflow on this commit whose checks all passed
+    and whose release artifacts still exist; the newest such run, or None.
+
+    A rerun of the same tag then publishes from those artifacts instead of
+    verifying the identical commit again: the publish job's verify step still
+    checks the artifact's recorded tag, repository and commit against the checkout.
+    """
+    runs = gh_json('repos/' + repo + '/actions/workflows/' + workflow_file + '/runs?head_sha=' + sha + '&per_page=50')
+    for entry in sorted(runs['workflow_runs'], key=lambda r: r['run_number'], reverse=True):
+        if str(entry['id']) == str(current) or entry['status'] != 'completed':
+            continue
+        jobs = gh_json('repos/' + repo + '/actions/runs/' + str(entry['id']) + '/jobs?per_page=100')['jobs']
+        checks = [job for job in jobs if job['name'].startswith('checks')]
+        if not checks or any(job['conclusion'] != 'success' for job in checks):
+            continue
+        artifacts = gh_json('repos/' + repo + '/actions/runs/' + str(entry['id']) + '/artifacts?per_page=100')['artifacts']
+        if not any(a['name'].startswith('release-') and not a['expired'] for a in artifacts):
+            continue
+        return entry['id']
+    return None
+
+
+def previous(root, tag, repo):
+    validate(root, tag, repo)
+    workflow_file = os.environ['GITHUB_WORKFLOW_REF'].split('@')[0].rsplit('/', 1)[1]
+    found = previous_run(repo, run('git', 'rev-parse', 'HEAD', cwd=root), workflow_file, os.environ.get('GITHUB_RUN_ID', ''))
+    line = 'run_id=' + (str(found) if found else '') + '\n'
+    if os.environ.get('GITHUB_OUTPUT'):
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            output.write(line)
+    print(('Reusing the verified artifacts of run ' + str(found)) if found
+          else 'No earlier verified run for this commit; the checks run now.')
+
+
+def trust_evidence(kind, name):
+    """What a registry shows about trusted publishing for this package: (level, message).
+
+    No registry exposes its trusted-publisher policy, but every version it
+    published through OIDC carries provenance, so one such version proves the
+    policy is in place; a package with none needs the one-time configuration
+    RELEASING.md describes before its first automated release.
+    """
+    if kind == 'npm':
+        data = download('https://registry.npmjs.org/' + urllib.parse.quote(name, safe=''), missing=True)
+        if data is None:
+            return 'note', name + ': not on npm yet; the first publication is the manual bootstrap'
+        versions = json.loads(data).get('versions', {})
+        proven = sorted(v for v, meta in versions.items() if meta.get('dist', {}).get('attestations'))
+        if proven:
+            return 'ok', name + ': trusted publishing proven by ' + proven[-1]
+        return 'warn', (name + ': no version published with provenance yet; configure the Trusted Publisher at '
+                        'https://www.npmjs.com/package/' + name + '/access (GitHub Actions, workflow release.yml, environment release)')
+    if kind == 'cargo':
+        data = download('https://crates.io/api/v1/crates/' + name + '/versions', missing=True)
+        if data is None:
+            return 'note', name + ': not on crates.io yet; the first publication is the manual bootstrap'
+        proven = sorted(v['num'] for v in json.loads(data).get('versions', []) if v.get('trustpub_data'))
+        if proven:
+            return 'ok', name + ': trusted publishing proven by ' + proven[-1]
+        return 'warn', (name + ': no version published through trusted publishing yet; configure it at '
+                        'https://crates.io/crates/' + name + '/settings/trusted-publishing')
+    if kind == 'nuget':
+        return 'note', name + ': NuGet exposes no provenance; confirm the trusted policy and NUGET_USER at nuget.org'
+    return 'ok', name + ': GitHub Release asset only'
+
+
+def doctor(root, repo):
+    """Report what a tag push needs before it can publish: variables, environment, registry trust."""
+    component, value = identity(root)
+    findings = []
+
+    def gh_ok(*args):
+        return subprocess.run([shutil.which('gh') or 'gh', *args], capture_output=True, text=True)
+
+    variable = gh_ok('variable', 'get', 'RELEASE_PUBLISH_ENABLED', '--repo', repo)
+    findings.append(('ok' if variable.stdout.strip() == 'true' else 'fail',
+                     'RELEASE_PUBLISH_ENABLED is ' + (variable.stdout.strip() or 'unset') + ' on ' + repo))
+    environment = gh_ok('api', 'repos/' + repo + '/environments/release')
+    findings.append(('ok' if environment.returncode == 0 else 'fail',
+                     'environment "release" ' + ('exists' if environment.returncode == 0 else 'is missing') + ' on ' + repo))
+    if component == 'dotnet':
+        user = gh_ok('variable', 'get', 'NUGET_USER', '--repo', repo)
+        findings.append(('ok' if user.stdout.strip() else 'fail', 'NUGET_USER is ' + (user.stdout.strip() or 'unset')))
+    for kind, name, _ in sorted(required_packages(component, value)):
+        findings.append(trust_evidence(kind, name))
+    width = max(len(level) for level, _ in findings)
+    for level, message in findings:
+        print(level.upper().ljust(width) + '  ' + message)
+    if any(level == 'fail' for level, _ in findings):
+        raise ValueError('Fix the FAIL lines before tagging ' + component + ' v' + value)
 
 
 def configure(root, repo, url=None, checksum=None, contracts_version='0.1.3'):
@@ -587,7 +741,8 @@ def smoke(root, registry=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['validate', 'contracts', 'stage', 'verify', 'status', 'wait', 'github', 'configure', 'smoke'])
+    parser.add_argument('command', choices=['validate', 'contracts', 'stage', 'verify', 'status', 'wait', 'draft', 'github',
+                                            'previous', 'doctor', 'configure', 'smoke'])
     parser.add_argument('--tag', default=os.environ.get('GITHUB_REF_NAME', ''))
     parser.add_argument('--repository', default=os.environ.get('GITHUB_REPOSITORY', ''))
     parser.add_argument('--contracts-url')
@@ -599,6 +754,8 @@ def main():
     root = Path.cwd()
     if args.command == 'smoke':
         smoke(root, args.registry)
+    elif args.command == 'doctor':
+        doctor(root, args.repository or config(root)['repository'])
     elif args.command == 'configure':
         configure(root, args.repository, args.contracts_url, args.contracts_sha256, args.contracts_version)
     elif args.command == 'contracts':
@@ -606,7 +763,8 @@ def main():
     elif args.command in {'status', 'wait'}:
         registry_status(root, args.tag, args.repository, args.command == 'wait', args.kind)
     else:
-        {'validate': validate, 'stage': stage, 'verify': verify, 'github': github_release}[args.command](root, args.tag, args.repository)
+        {'validate': validate, 'stage': stage, 'verify': verify, 'draft': github_draft, 'github': github_release,
+         'previous': previous}[args.command](root, args.tag, args.repository)
 
 
 if __name__ == '__main__':

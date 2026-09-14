@@ -204,6 +204,17 @@ class PublishTests(unittest.TestCase):
         self.assertEqual(json.loads((self.out / 'docs.json').read_text())['source_commit'], COMMIT)
         self.assertEqual(len(self.registry.pushes), 1)
 
+    def test_check_names_the_fix_before_a_collision_reaches_publish(self):
+        options = {'repository': 'usejelto/docs', 'commit': COMMIT, 'run': self.registry.run}
+        self.assertEqual(tool.check(self.root, self.out, 'ghcr.io/usejelto', **options)['state'], 'unpublished')
+        self.publish()
+        self.assertEqual(tool.check(self.root, self.out, 'ghcr.io/usejelto', **options)['state'], 'identical')
+        (self.root / 'dist/index.html').write_bytes(b'<html>changed')
+        with self.assertRaisesRegex(tool.PackageError, 'bump the version before merging'):
+            tool.check(self.root, self.out, 'ghcr.io/usejelto', **options)
+        # A check never pushes.
+        self.assertEqual(len(self.registry.pushes), 1)
+
     def test_a_missing_sha_tag_is_added_to_a_matching_existing_artifact(self):
         first = self.publish()
         del self.registry.tags[f'ghcr.io/usejelto/docs-package:sha-{COMMIT}']

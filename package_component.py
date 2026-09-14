@@ -219,6 +219,27 @@ def same_content(name, found, manifest, archive, run):
         return published if without_commit == mine else None
 
 
+def check(root, out, registry, repository=None, commit=None, run=subprocess.run):
+    """Whether this checkout's version can still be published: absent, or identical to what is published.
+
+    A published version is immutable, so changed content under the version the
+    registry already holds fails at publish time, after the whole check job has
+    passed (frontend and docs 1.0.2, 2026-09-14). Asking the registry from the
+    check job instead names the fix while the change is still on a branch.
+    """
+    manifest, archive = build(root, out, repository, commit, published=True)
+    component, version = manifest['component'], manifest['version']
+    name = f'{registry}/{component}-package'
+    found = resolve(name, version, run)
+    if found is None:
+        return {'component': component, 'version': version, 'state': 'unpublished'}
+    if same_content(name, found, manifest, archive, run) is None:
+        raise PackageError(f'{name}:{version} is already published with different content; a published '
+                           f'version is immutable, so bump the version before merging, for example '
+                           f'`npm version patch --no-git-tag-version`, and commit it as chore(package)')
+    return {'component': component, 'version': version, 'state': 'identical'}
+
+
 def publish(root, out, registry, repository=None, commit=None, image_spec='v1.1', run=subprocess.run):
     manifest, archive = build(root, out, repository, commit, published=True)
     component, version = manifest['component'], manifest['version']
@@ -275,6 +296,8 @@ def main():
     parser.add_argument('--commit', help='full producer commit (default: git HEAD of the root)')
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('build', help='write the archive and manifest')
+    c = sub.add_parser('check', help='fail when the version is published with different content')
+    c.add_argument('--registry', help='registry namespace (default: ghcr.io/<GITHUB_REPOSITORY_OWNER>)')
     p = sub.add_parser('publish', help='build and push to the organization registry')
     p.add_argument('--registry', help='registry namespace (default: ghcr.io/<GITHUB_REPOSITORY_OWNER>)')
     p.add_argument('--image-spec', choices=IMAGE_SPECS, default=IMAGE_SPECS[0])
@@ -292,6 +315,12 @@ def main():
             if not owner:
                 raise PackageError('publish needs --registry or GITHUB_REPOSITORY_OWNER')
             registry = f'ghcr.io/{owner.lower()}'
+        if args.command == 'check':
+            state = check(root, out, registry, args.repository, args.commit)
+            print(f'  {state["component"]} v{state["version"]} is {state["state"]}: '
+                  + ('a push to main publishes it' if state['state'] == 'unpublished'
+                     else 'the registry already holds these bytes'))
+            return
         done = publish(root, out, registry, args.repository, args.commit, args.image_spec)
     except PackageError as error:
         sys.exit(f'FATAL: {error}')

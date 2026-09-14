@@ -36,20 +36,54 @@ jobs:
           python-version: '3.13'
       - run: python3 release.py validate
 
-  checks:
+  previous:
+    # A rerun of the same tag publishes from the verified artifacts of an earlier
+    # run on this commit whose checks all passed, instead of verifying the
+    # identical commit again; the publish job still checks the artifact's
+    # recorded tag, repository and commit against its checkout.
     needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      run_id: ${{ steps.previous.outputs.run_id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - id: previous
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 release.py previous
+
+  checks:
+    needs: [validate, previous]
+    if: needs.previous.outputs.run_id == ''
     uses: ./.github/workflows/ci.yml
     with:
       release: true
 
   publish:
-    needs: [validate, checks]
-    if: vars.RELEASE_PUBLISH_ENABLED == 'true' && (github.event_name == 'push' || inputs.publish)
+    needs: [validate, previous, checks]
+    # checks is skipped when an earlier run's verified artifacts are reused.
+    if: >-
+      !cancelled() && needs.validate.result == 'success' && needs.previous.result == 'success'
+      && (needs.checks.result == 'success' || (needs.checks.result == 'skipped' && needs.previous.outputs.run_id != ''))
+      && vars.RELEASE_PUBLISH_ENABLED == 'true' && (github.event_name == 'push' || inputs.publish)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     environment: release
     permissions:
       contents: write
+      # Downloading a previous run's artifacts.
+      actions: read
 
     steps:
       - uses: actions/checkout@v7
@@ -65,8 +99,17 @@ jobs:
         with:
           name: release-Linux
           path: release-artifacts/
+          run-id: ${{ needs.previous.outputs.run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Verify artifact source and contents
         run: python3 release.py verify
+      - name: Open the GitHub Release draft before publishing anything
+        # Opened first so a rerun only uploads assets and publishes the draft;
+        # when the token cannot open it, nothing has been published yet and the
+        # step prints the one command that opens the draft by hand.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 release.py draft
 
       - name: Create or finish GitHub Release
         env:
