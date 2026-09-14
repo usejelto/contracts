@@ -191,7 +191,7 @@ func runCheck(evidence Evidence, check Check) Result {
 	case "stable_ids":
 		return checkStableIDs(name, evidence, check)
 
-	case "app_updates":
+	case "app_updates", "update_activity":
 		return checkAppUpdates(name, evidence, check)
 
 	// C8b, C9, C9b: what the client was told, without re-deriving it.
@@ -281,6 +281,11 @@ func runCheck(evidence Evidence, check Check) Result {
 
 // Count logical transitions while checking immutable payloads on every retry.
 func checkAppUpdates(name string, evidence Evidence, check Check) Result {
+	activity := check.Check == "update_activity"
+	eventName := "app_updated"
+	if activity {
+		eventName = "app_update"
+	}
 	seen := map[string]string{}
 	var transitions []string
 	installID := ""
@@ -300,14 +305,14 @@ func checkAppUpdates(name string, evidence Evidence, check Check) Result {
 			if installID == "" {
 				installID = str("iid")
 			}
-			if str("n") != "app_updated" {
+			if str("n") != eventName {
 				continue
 			}
 			var props map[string]string
-			if err := json.Unmarshal(event["props"], &props); err != nil || len(props) != 2 || props["from_version"] == "" || props["to_version"] == "" {
-				return fail(name, "app_updated must have exactly from_version/to_version string properties")
+			if err := json.Unmarshal(event["props"], &props); err != nil || (!activity && len(props) != 2) || props["from_version"] == "" || props["to_version"] == "" || props["from_version"] == props["to_version"] {
+				return fail(name, "update telemetry must have distinct from_version/to_version string properties")
 			}
-			if str("av") != props["to_version"] {
+			if !activity && str("av") != props["to_version"] {
 				return fail(name, "av=%q differs from to_version=%q", str("av"), props["to_version"])
 			}
 			if str("iid") != installID {
@@ -325,7 +330,11 @@ func checkAppUpdates(name string, evidence Evidence, check Check) Result {
 				continue
 			}
 			seen[id] = string(canonical)
-			transitions = append(transitions, props["from_version"]+"=>"+props["to_version"])
+			if activity {
+				transitions = append(transitions, props["status"])
+			} else {
+				transitions = append(transitions, props["from_version"]+"=>"+props["to_version"])
+			}
 		}
 	}
 	if len(transitions) != len(check.Values) {

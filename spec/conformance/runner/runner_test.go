@@ -159,7 +159,7 @@ func TestScenariosLoadAndAreOrdered(t *testing.T) {
 var knownChecks = map[string]bool{
 	"request_count": true, "connection_count": true, "event_count": true,
 	"max_events_per_request": true, "event_names": true, "request_shape": true,
-	"schedule": true, "no_request_before_s": true, "stable_ids": true, "app_updates": true,
+	"schedule": true, "no_request_before_s": true, "stable_ids": true, "app_updates": true, "update_activity": true,
 	"statuses": true, "stderr": true, "host_reply": true, "state_dir_empty": true,
 	"state": true, "queue": true, "t_literal": true, "event_field": true,
 	"event_prop": true, "exit_code": true, "exit_within_ms": true,
@@ -194,6 +194,25 @@ func TestStateStringComparisonAcceptsEquivalentJSONEscaping(t *testing.T) {
 	}
 	if result := runCheck(Evidence{State: json.RawMessage(`{"last_app_version":"build-A-2"}`)}, check); result.Passed {
 		t.Fatal("different versions compared equal")
+	}
+}
+
+func TestUpdateActivityCheckPreservesRetriesAndDistinctObservations(t *testing.T) {
+	activity := func(id, status string) Record {
+		return Record{Body: envelope(`{"id":"` + id + `","n":"app_update","iid":"install","av":"A","props":{"from_version":"A","to_version":"B","status":"` + status + `"}}`)}
+	}
+	check := Check{Check: "update_activity", Values: []string{"download_started", "download_started"}}
+	valid := Evidence{Requests: []Record{activity("one", "download_started"), activity("one", "download_started"), activity("two", "download_started")}}
+	if result := runCheck(valid, check); !result.Passed {
+		t.Fatal(result.Detail)
+	}
+	for _, invalid := range []Evidence{
+		{Requests: []Record{activity("one", "download_started"), activity("one", "download_started")}},
+		{Requests: []Record{activity("one", "download_started"), activity("one", "install_failed")}},
+	} {
+		if result := runCheck(invalid, check); result.Passed {
+			t.Fatal("lost observation or changed retry accepted")
+		}
 	}
 }
 
