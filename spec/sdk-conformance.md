@@ -403,6 +403,14 @@ commit. Recertification on every minor wire-format addition.
 
 ## 7. Automatic application update detection
 
+Updater activity is separate from automatic version detection. Applications use
+the existing `track("app_update", props)` API for wire §4's explicit stages,
+failures and postponements. No extra SDK method or state is required. The ordinary
+queue, stable event IDs, retry, reset and disable rules apply. C24 verifies all
+statuses through `track`, including unchanged version baselines and distinct IDs
+for two observations of the same stage. SDKs do not infer updater outcomes from
+the appcast URL or missing subsequent launches.
+
 Gates: each SDK's own unit, build and budget checks, and two consecutive
 full conformance runs for the reference host and each supported app SDK.
 Swift, Electron, Tauri 2 and .NET MUST implement the same behavior.

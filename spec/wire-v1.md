@@ -146,6 +146,7 @@ exact bytes of each so this table cannot drift from the handler.
 | `heartbeat` | app | `iid av os osv arch` | **install properties**: `license` (reserved, e.g. `trial` `paid` `expired` `free`) plus the keys the product allowlists for `heartbeat` in `event_schema`. **Every install-property value, `license` included, matches `^[a-z0-9_.-]{1,24}$`** — one grammar, the one the server has always applied to all of them. The property count is §3's `props` cap of **20**, which is also what `event_schema.allowed_props` and the account API bound; a heartbeat carrying more is `invalid_field` naming `props`, and a key the product has not allowlisted is `prop_not_allowlisted` whether or not the count is under the cap, so what bounds a heartbeat in practice is the allowlist and 20 is its ceiling. ≤ 50 distinct values per key per product, beyond that `other`. The heartbeat carries the app's **current** values every time; the server keeps the latest per install. `products.paid_license_value` — the Settings value the server's `license_conversion` metric compares a stored `license` against — takes this same grammar, because a value outside it can never match one an app sent. |
 | `install` | app | `iid av os osv arch` | — |
 | `app_updated` | app | `id iid av os osv arch` | `from_version`, `to_version` (required nonblank strings ≤ 32 Unicode scalars); `av` equals `to_version`, and the two versions differ by exact scalar equality |
+| `app_update` | app | `id iid av os osv arch` | `from_version`, `to_version` (required distinct nonblank strings ≤ 32 Unicode scalars), `status` (required: `download_started`, `downloaded`, `install_started`, `download_failed`, `install_failed`, `failed`, or `postponed`), `reason` (optional string matching `^[a-z0-9_.-]{1,64}$`) |
 | `onboarding:<step>` | app | `iid av os osv arch` | `status` (required: `ok` \| `fail` \| `skip`), `reason` (optional, ≤ 64 chars, `^[a-z0-9_.-]+$`; free text is rejected) |
 | `purchase` | web, app | — never sent by a client | `amount` (a decimal as a **string**, stored as sent and never rounded, negative for a refund), `currency` (ISO 4217, uppercase) |
 
@@ -190,6 +191,26 @@ delivery; update completion metrics reduce them by `(install_id, event_id)` (met
 An older server needs this reserved-event support before updated SDKs are deployed; otherwise
 it can reject the event as `unknown_event`. This is an additive wire-v1 event, not a new
 envelope or identity format. Existing SDK state and queued events require no rewrite.
+
+`app_update` records explicit updater activity through the existing SDK `track` API,
+without an `event_schema` row. Its fixed props cannot be extended. Send a new event
+once per observed stage or deliberate postponement; never once per progress tick.
+`from_version` is the version being replaced and `to_version` is the known target.
+`av` remains the SDK's app metadata; it need not equal either property (for example,
+when reporting a saved installer outcome after restart). Use `download_failed` or
+`install_failed` only when that stage is known, and `failed` otherwise. A cancelled
+download is not evidence of a deliberate postponement. `postponed` requires an
+explicit user choice or the host declining installation. `reason` is an application
+defined category, never an exception message, path, URL or other free text.
+
+These events describe observations, not a mandatory sequence or a conversion funnel.
+A download can be cached, installation may run outside the app, and a process can
+exit without reporting its outcome. Never infer failure or postponement from a
+missing event. The later automatic `app_updated` event remains the evidence of a
+changed version actually launching. Each `track` call gets its own stable event ID;
+transport retries preserve that ID. The server retains `app_update` IDs and reduces
+completion counts by `(install_id, event_id)` just as for `app_updated`. Neither
+event affects install claims or heartbeats. A feed URL alone cannot emit activity.
 
 Any other `n` is a custom event and MUST be present in the product's `event_schema` (§7) or the
 event is rejected with `unknown_event`.
