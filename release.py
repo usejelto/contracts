@@ -462,7 +462,7 @@ def github_release(root, tag, repo):
                 '--prerelease=' + str('-' in record['version']).lower(), '--latest=' + str('-' not in record['version']).lower())
 
 
-def configure(root, repo, url=None, checksum=None, contracts_version='0.1.2'):
+def configure(root, repo, url=None, checksum=None, contracts_version='0.1.3'):
     repository(repo)
     settings = config(root)
     settings['repository'] = repo
@@ -592,7 +592,7 @@ def main():
     parser.add_argument('--repository', default=os.environ.get('GITHUB_REPOSITORY', ''))
     parser.add_argument('--contracts-url')
     parser.add_argument('--contracts-sha256')
-    parser.add_argument('--contracts-version', default='0.1.2')
+    parser.add_argument('--contracts-version', default='0.1.3')
     parser.add_argument('--kind', choices=['npm', 'cargo', 'nuget'])
     parser.add_argument('--registry', action='store_true')
     args = parser.parse_args()
