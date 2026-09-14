@@ -401,6 +401,12 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(release.identity(self.root), ('analytics', '1.2.3'))
         release.validate(self.root, 'v1.2.3', 'owner/new-repo', ancestry=False)
 
+    def test_configure_keeps_non_ascii_package_metadata_as_written(self):
+        self.package['description'] = 'Jelto SDK \u2014 \u00a78'
+        (self.root / 'package.json').write_text(json.dumps(self.package, indent=2, ensure_ascii=False) + '\n')
+        release.configure(self.root, self.repo)
+        self.assertIn('Jelto SDK \u2014 \u00a78', (self.root / 'package.json').read_text())
+
     def test_electron_metadata_links_to_the_existing_framework_guide(self):
         (self.root / 'release.json').write_text(json.dumps({'component': 'electron'}))
         self.package['name'] = '@jelto/electron'

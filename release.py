@@ -642,7 +642,8 @@ def configure(root, repo, url=None, checksum=None, contracts_version='0.1.3'):
         package['homepage'] = 'https://jelto.io/docs/sdk/' + guide
         package['bugs'] = {'url': address + '/issues'}
         package['publishConfig'] = {'access': 'public', 'registry': 'https://registry.npmjs.org'}
-        (root / 'package.json').write_text(json.dumps(package, indent=2) + '\n')
+        # ensure_ascii would escape the em dash in a description and turn a repin into a noisy diff.
+        (root / 'package.json').write_text(json.dumps(package, indent=2, ensure_ascii=False) + '\n')
     if settings['component'] == 'tauri':
         path = root / 'Cargo.toml'
         content = re.sub(r'^repository = .*\n', '', path.read_text(), flags=re.M)
