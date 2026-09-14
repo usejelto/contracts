@@ -126,7 +126,10 @@ class HTTPSRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-DOWNLOAD_ATTEMPTS = 3
+# Five attempts with a doubling pause (2, 4, 8, 16 s): three attempts two and
+# four seconds apart did not outlast a GitHub 504 on a release asset, and that
+# one download cost a whole tauri release run (2026-09-14).
+DOWNLOAD_ATTEMPTS = 5
 DOWNLOAD_PAUSE = 2.0
 
 
@@ -163,7 +166,7 @@ def download(url, missing=False, accept=None):
         except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException) as error:
             last = error
         if attempt < DOWNLOAD_ATTEMPTS:
-            time.sleep(DOWNLOAD_PAUSE * attempt)
+            time.sleep(DOWNLOAD_PAUSE * 2 ** (attempt - 1))
     raise RuntimeError(f'Download failed after {DOWNLOAD_ATTEMPTS} attempts: {url} ({last})')
 
 

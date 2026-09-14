@@ -226,11 +226,13 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(opened.call_count, 3)
         self.assertEqual([call.args[0] for call in slept.call_args_list],
                          [release.DOWNLOAD_PAUSE, release.DOWNLOAD_PAUSE * 2])
-        with patch('urllib.request.OpenerDirector.open', side_effect=[reset, reset, reset]) as opened, \
-                patch('release.time.sleep'):
-            with self.assertRaisesRegex(RuntimeError, 'Download failed after 3 attempts'):
+        with patch('urllib.request.OpenerDirector.open', side_effect=[reset] * release.DOWNLOAD_ATTEMPTS) as opened, \
+                patch('release.time.sleep') as slept:
+            with self.assertRaisesRegex(RuntimeError, 'Download failed after 5 attempts'):
                 release.download('https://example.com/file')
-        self.assertEqual(opened.call_count, 3)
+        self.assertEqual(opened.call_count, 5)
+        # A doubling pause outlasts the gateway timeouts a release asset has answered with.
+        self.assertEqual([call.args[0] for call in slept.call_args_list], [2.0, 4.0, 8.0, 16.0])
         missing = urllib.error.HTTPError('https://example.com', 404, 'missing', {}, None)
         self.addCleanup(missing.close)
         with patch('urllib.request.OpenerDirector.open', side_effect=missing) as opened, \
