@@ -14,6 +14,7 @@ type Export struct {
 
 	LastHeartbeatDay string `json:"last_heartbeat_day,omitempty"` // §8.2 item 3, floor(ms / 86 400 000)
 
+	InstallOrigin   string            `json:"install_origin,omitempty"`    // wire §5.2; frozen with the claim
 	InstallClaimed  bool              `json:"install_claimed"`             // §8.2 item 4
 	InstallDueAt    string            `json:"install_due_at,omitempty"`    // §8.2 item 4's deadline, not a countdown (C4c)
 	InstallFirstTry string            `json:"install_first_try,omitempty"` // §8.2 item 4's 30-day window (C4b)
@@ -72,6 +73,7 @@ func (s *SDK) Export() Export {
 		LastAppVersion:   state.LastAppVersion,
 		LastHeartbeatDay: state.LastHeartbeatDay,
 		InstallClaimed:   state.InstallClaimed,
+		InstallOrigin:    state.InstallOrigin,
 		InstallDueAt:     state.InstallDueAt,
 		InstallFirstTry:  state.InstallFirstTry,
 		InstallProps:     props,

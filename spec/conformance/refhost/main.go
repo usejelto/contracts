@@ -162,7 +162,7 @@ func (h *host) dispatch(line string) (stop bool) {
 			slug = tokens[2]
 		}
 		start := time.Now()
-		h.sdk.Init(tokens[1], slug)
+		h.sdk.Init(tokens[1], slug, os.Getenv("JELTO_INSTALL_ORIGIN"))
 		h.reply(Reply{Cmd: "init", OK: true, Micros: time.Since(start).Microseconds()})
 
 	case "track":

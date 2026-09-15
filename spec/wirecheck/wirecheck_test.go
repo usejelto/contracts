@@ -44,6 +44,27 @@ func TestValidatorStillAgreesWithW1(t *testing.T) {
 	}
 }
 
+func TestInstallOriginIsOptionalAndCoarse(t *testing.T) {
+	v := testValidator(t)
+	for _, tc := range []struct {
+		props string
+		valid bool
+	}{
+		{``, true}, {`,"props":{}`, true},
+		{`,"props":{"install_origin":"new"}`, true},
+		{`,"props":{"install_origin":"existing"}`, true},
+		{`,"props":{"install_origin":"unknown"}`, true},
+		{`,"props":{"install_origin":"2026-09-15"}`, false},
+		{`,"props":{"install_origin":true}`, false},
+		{`,"props":{"install_origin":""}`, false},
+	} {
+		body := `{"v":1,"p":"prd_conform001","e":[{"n":"install","s":"app","iid":"0191c000-0000-7000-8000-000000000001","av":"1.0","os":"macos","osv":"15.1","arch":"arm64"` + tc.props + `}]}`
+		if err := v.ValidateBody([]byte(body)); (err == nil) != tc.valid {
+			t.Errorf("props %s: valid=%v, error=%v", tc.props, tc.valid, err)
+		}
+	}
+}
+
 // Every message sdk/swift can write, classified. The rows marked NOT "drop" are
 // the reason this table exists: checking only `grep '^jelto: drop'` would
 // miss these three client-side loss messages.
@@ -169,5 +190,15 @@ func TestCensusCountsAnInvalidBodyToo(t *testing.T) {
 	}
 	if err := testValidator(t).ValidateBody([]byte(body)); err == nil {
 		t.Fatal("this body is supposed to be schema-invalid; the fixture has drifted")
+	}
+}
+
+func TestInstallOriginCannotBeAMutableEventProperty(t *testing.T) {
+	v := testValidator(t)
+	for _, name := range []string{"heartbeat", "export_finished"} {
+		body := `{"v":1,"p":"prd_conform001","e":[{"n":"` + name + `","s":"app","iid":"0191c000-0000-7000-8000-000000000001","av":"1.0","os":"macos","osv":"15.1","arch":"arm64","props":{"install_origin":"new"}}]}`
+		if err := v.ValidateBody([]byte(body)); err == nil {
+			t.Errorf("%s accepted reserved origin", name)
+		}
 	}
 }

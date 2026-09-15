@@ -144,7 +144,7 @@ exact bytes of each so this table cannot drift from the handler.
 | `click:outbound` | web | `u` | `url` (hostname only) |
 | `engagement` | web | `u pv e sd` | — |
 | `heartbeat` | app | `iid av os osv arch` | **install properties**: `license` (reserved, e.g. `trial` `paid` `expired` `free`) plus the keys the product allowlists for `heartbeat` in `event_schema`. **Every install-property value, `license` included, matches `^[a-z0-9_.-]{1,24}$`** — one grammar, the one the server has always applied to all of them. The property count is §3's `props` cap of **20**, which is also what `event_schema.allowed_props` and the account API bound; a heartbeat carrying more is `invalid_field` naming `props`, and a key the product has not allowlisted is `prop_not_allowlisted` whether or not the count is under the cap, so what bounds a heartbeat in practice is the allowlist and 20 is its ceiling. ≤ 50 distinct values per key per product, beyond that `other`. The heartbeat carries the app's **current** values every time; the server keeps the latest per install. `products.paid_license_value` — the Settings value the server's `license_conversion` metric compares a stored `license` against — takes this same grammar, because a value outside it can never match one an app sent. |
-| `install` | app | `iid av os osv arch` | — |
+| `install` | app | `iid av os osv arch` | optional `install_origin` enum in §5.2 |
 | `app_updated` | app | `id iid av os osv arch` | `from_version`, `to_version` (required nonblank strings ≤ 32 Unicode scalars); `av` equals `to_version`, and the two versions differ by exact scalar equality |
 | `app_update` | app | `id iid av os osv arch` | `from_version`, `to_version` (required distinct nonblank strings ≤ 32 Unicode scalars), `status` (required: `download_started`, `downloaded`, `install_started`, `download_failed`, `install_failed`, `failed`, or `postponed`), `reason` (optional string matching `^[a-z0-9_.-]{1,64}$`) |
 | `onboarding:<step>` | app | `iid av os osv arch` | `status` (required: `ok` \| `fail` \| `skip`), `reason` (optional, ≤ 64 chars, `^[a-z0-9_.-]+$`; free text is rejected) |
@@ -243,9 +243,39 @@ event is rejected with `unknown_event`.
 | `arch` | MUST | `"arm64"` \| `"x64"` \| `"x86"` | |
 | `a` | MAY | string `^[a-z0-9-]{1,32}$` | App slug as registered under Settings › Apps (`mac`, `win`, `helper`). Unknown slug → `other`; absent → the `os` value, and an **empty `a` is an absent `a`** (§5.1 `f`). Lets a product with two apps on one OS tell them apart. |
 
+#### Installs that predate SDK adoption
+
+This optional signal adds one reserved property to the fixed `install` schema, using the existing `props`
+object and key/value grammar; it adds no timestamp, identifier or new top-level wire type.
+
+| Field | Req | Type | Rule |
+|---|---|---|---|
+| `props.install_origin` | MAY, on `install` only | `"new"` \| `"existing"` \| `"unknown"` | Host-supplied classification at the first SDK initialization for this claim. `new`: the host knows this is the app installation's first launch. `existing`: the app installation already existed before Jelto initialization. Omitted means `unknown`, never `new`. Other values are `invalid_field`; this reserved property needs no customer allowlist. |
+
+SDK initialization exposes an optional `installOrigin` enum (idiomatic naming per SDK),
+defaulting to `unknown`. The host must inspect its **pre-existing** first-launch/onboarding
+state before overwriting it: a saved first-launch date or completed onboarding can establish
+`existing`; absence of a completed-onboarding flag alone cannot establish `new`. The SDK must
+not infer origin from its own newly created identity file. This deliberately coarse bucket
+does not transmit the date, elapsed days, onboarding history, or any host identifier.
+
+Capture and persist the classification when the claim is first created, alongside its durable
+claim state; queued events and retries retain it unchanged. Later initialization calls cannot
+reclassify an existing claim. Legacy state without this classification stays `unknown`,
+even if the host now supplies a hint. `reset()` rotates the SDK identity with origin
+`unknown`: it cannot establish a new app installation. Disable followed by a new init
+can capture that init's hint for its new claim. Do not backdate `t`, change claim timing, replay onboarding, or
+attach this property to heartbeats. `existing` does not age into `new` or a numeric age bucket.
+RFC §5.2/§8.2 and metrics §4.2d define storage and the resulting reads.
+
+Deploy server/schema/storage/read support before SDK initialization options and host
+adoption. Older servers need not accept this reserved property. Historical omissions stay
+`unknown`; neither an adoption date nor a heartbeat can recover an installation's birth.
+
 ### 5.3 Reinstall detection
 
-An `install` event carries no attribution payload of any kind — only the common §5.2 fields. The
+An `install` event carries no attribution payload of any kind — only the common §5.2 fields
+and its reserved origin property. The
 server treats an `install` for an `install_id` that already has an `installs` row, within 30 days,
 as a **reinstall**: the row is stored in `events` with `is_reinstall = true` and is excluded from
 the **`installs` table** (`installs_mv` filters `is_reinstall = false`, RFC §5.2) and from
@@ -343,7 +373,8 @@ returns retryable HTTP 503 and MUST NOT consume the failing event's ID.
 
 `heartbeat` install-property keys are also discovered. Its `license` key remains
 built in, and install-property value rules remain unchanged. Other built-ins retain
-fixed schemas: pageview, engagement and install take no props; app_updated takes
+fixed schemas: pageview and engagement take no props; install accepts only the optional
+`install_origin` enum in §5.2; app_updated takes
 from_version/to_version; app_update takes from_version/to_version/status and an
 optional reason; click events take their fixed property; onboarding takes
 status/reason. Their unsupported keys still return `prop_not_allowlisted`.
@@ -354,6 +385,44 @@ and by optional event settings writes, regardless of a catalog entry:
 `subscription_started`, `subscription_upgraded`, `subscription_downgraded`,
 `subscription_renewed`, `subscription_cancel_scheduled`, `subscription_reactivated`,
 `subscription_ended`. Automatic payment goals do not consume custom catalog slots.
+
+`GET /api/v1/products/{product}/events` returns the configured `schema`, plus
+optional observed channels. `unknown_seen` lists recently rejected unknown names;
+`observed_app_goals` lists received app goal names when `surface=app`.
+`observed_props: [{"event":"paywall_shown","keys":["feature"]}]` lists stored
+property keys absent from each configured event's current `allowed_props`.
+This repairs historical or manually edited catalog gaps; normal receipt discovery
+above already merges new custom keys. Allowlisting a key makes its previously
+collected values queryable immediately; no resend or data backfill is needed.
+
+Observed properties use rows received in the last seven days (`ingest_ts`, UTC),
+scoped to this product and optional `surface=app|web`; omitting surface combines
+both. Only editable custom events and heartbeat are eligible; fixed built-ins,
+automatic payment events and heartbeat's built-in `license` key are excluded.
+Select at most the first 100 configured eligible event names, and at most 20
+distinct missing keys per event, both sorted bytewise. Only keys matching the
+allowlist grammar `^[a-z0-9_]{1,32}$` are returned. Events without missing keys
+are absent. Values are never returned. These bounds describe recent suggestions,
+not an exhaustive lifetime inventory.
+
+Each observed channel is optional independently: a successful empty property
+read returns `observed_props: []`; a ClickHouse failure omits `observed_props`
+while still returning the configured schema. Clients must treat event names and
+keys as customer text, escape them when displayed and preserve their exact values
+when requesting the existing allowlist edit operation. Discovery never grants
+query access by itself: the per-event read-time allowlist still applies.
+
+To add observed keys safely, use `PUT /api/v1/products/{product}/events?mode=merge`
+with the existing array body, for example
+`[{"event":"paywall_shown","allowed_props":["feature"]}]`. Under the same
+product transaction lock as automatic discovery, merge unions each named event's
+keys with its current keys and preserves every unmentioned event. The 100-event
+and 20-key limits apply to the resulting union; overflow returns
+`400 too_many_entries` (`field: schema`) and rolls back the whole request.
+Success returns the complete sorted stored schema, in the ordinary PUT response
+shape. An empty merge is a no-op. Omitting `mode` retains the original whole-list
+replacement semantics; an empty, repeated or unsupported mode is
+`400 invalid_field` (`field: mode`), never an implicit replacement.
 
 ## 8. Kill switch
 

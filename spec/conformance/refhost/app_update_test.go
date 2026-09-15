@@ -201,7 +201,7 @@ func TestFailedRecoveryCheckpointKeepsPreviousQueue(t *testing.T) {
 func TestResetQueueCheckpointRetainsRecoveryReceipt(t *testing.T) {
 	queue := NewQueue(filepath.Join(t.TempDir(), "queue.jsonl"))
 	event := interruptedUpdate()
-	if !queue.Recover(event) || !queue.DiscardUpdates() {
+	if !queue.Recover(event) || !queue.DiscardIdentityEvents() {
 		t.Fatal("seed reset checkpoint")
 	}
 	// A failed state commit leaves the old intent even though reset discarded the queue entry.

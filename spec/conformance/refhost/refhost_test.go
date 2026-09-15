@@ -269,7 +269,7 @@ func TestDumpstateBeforeInitCreatesNothingAndReportsEmpty(t *testing.T) {
 	}
 	named := map[string]bool{
 		"install_id": true, "last_heartbeat_day": true, "install_claimed": true,
-		"install_due_at": true, "install_first_try": true, "install_props": true,
+		"install_due_at": true, "install_first_try": true, "install_props": true, "install_origin": true,
 		"backoff_step_ms": true, "backoff_next_at": true, "stop_until": true,
 		"stop_probe_due": true, "queue": true,
 	}
@@ -426,9 +426,10 @@ func TestDumpstateQueueBytesIsWhatTheCapBindsOn(t *testing.T) {
 // wireBatch is one recorded request: the §2 envelope reduced to the two fields
 // these two tests assert on.
 type wireBatch []struct {
-	ID string          `json:"id"`
-	N  string          `json:"n"`
-	T  json.RawMessage `json:"t"`
+	ID    string          `json:"id"`
+	Props map[string]any  `json:"props"`
+	N     string          `json:"n"`
+	T     json.RawMessage `json:"t"`
 }
 
 func (b wireBatch) names() []string {

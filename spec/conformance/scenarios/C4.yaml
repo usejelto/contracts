@@ -10,12 +10,12 @@ arms:
       - run: [init prd_conform001, sleep 3000]
     assert:
       - {check: event_names, counts: {install: 1}, why: "exactly one install event, and a further init sends no second"}
-      - check: event_field
+      - check: event_prop
         request: 0
         event: 1
-        field: props
-        absent: true
-        why: "no attribution payload -- the wire's install carries only iid av os osv arch"
+        key: install_origin
+        value: unknown
+        why: "no host origin hint means unknown; this coarse provenance is not attribution"
       - check: state_deadline
         path: install_due_at
         anchor: jelto_now

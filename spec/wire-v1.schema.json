@@ -466,6 +466,18 @@
             "properties": {
               "s": {
                 "const": "app"
+              },
+              "props": {
+                "type": "object",
+                "properties": {
+                  "install_origin": {
+                    "enum": [
+                      "new",
+                      "existing",
+                      "unknown"
+                    ]
+                  }
+                }
               }
             }
           }
@@ -619,6 +631,28 @@
                     "pattern": "^[a-z0-9_.-]{1,64}$"
                   }
                 }
+              }
+            }
+          }
+        },
+        {
+          "$comment": "§5.2: install_origin is reserved for immutable install claims, never mutable heartbeat or custom props.",
+          "if": {
+            "required": [
+              "props"
+            ],
+            "properties": {
+              "props": {
+                "required": [
+                  "install_origin"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "n": {
+                "const": "install"
               }
             }
           }

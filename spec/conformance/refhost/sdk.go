@@ -34,16 +34,17 @@ const (
 
 // SDK runs deadlines and requests on one background pump.
 type SDK struct {
-	log      *Debug
-	clock    *Clock
-	store    *Store
-	queue    *Queue
-	client   *http.Client
-	endpoint string
-	mock     string
-	platform Platform
-	version  string
-	random   *rand.Rand
+	log           *Debug
+	clock         *Clock
+	store         *Store
+	queue         *Queue
+	client        *http.Client
+	endpoint      string
+	mock          string
+	platform      Platform
+	version       string
+	installOrigin string
+	random        *rand.Rand
 
 	mu                  sync.Mutex
 	started             bool
@@ -94,7 +95,7 @@ func NewSDK(log *Debug, clock *Clock, store *Store, endpoint, mock, version stri
 
 // Init is §8.1's init(key, app?). It returns without touching the filesystem
 // or the network: everything real happens on the pump (§8.2 item 1, C1).
-func (s *SDK) Init(key, slug string) {
+func (s *SDK) Init(key, slug string, origin ...string) {
 	s.mu.Lock()
 	if s.started && !s.disabled {
 		// §8.1: init happens "once".
@@ -103,6 +104,10 @@ func (s *SDK) Init(key, slug string) {
 	}
 	restart := s.started && s.disabled
 	s.started, s.disabled, s.key = true, false, key
+	s.installOrigin = "unknown"
+	if len(origin) > 0 {
+		s.installOrigin = normalizeInstallOrigin(origin[0])
+	}
 	if slug != "" {
 		// §5.2 `a`. A slug outside the grammar is dropped rather than sent:
 		// the server would answer invalid_field for every event carrying it.
@@ -152,7 +157,10 @@ func (s *SDK) bootstrap(ready chan struct{}) {
 		// §8.2 item 2: load the install_id, create a UUIDv4 if absent.
 		if state.InstallID == "" || state.InstallID == NilUUID {
 			state.InstallID = newUUIDv4()
+			state.InstallOrigin = s.installOrigin
 		}
+		state.InstallOrigin = normalizeInstallOrigin(state.InstallOrigin)
+		delete(state.InstallProps, "install_origin")
 		if state.InstallProps == nil {
 			state.InstallProps = map[string]string{}
 		}
@@ -196,6 +204,13 @@ func (s *SDK) Track(name string, props map[string]any) {
 	if !reEventName.MatchString(name) {
 		s.log.Printf("drop event %q: spec/wire-v1.md §3 `n` is ^[a-z0-9_:.-]{1,64}$", name)
 		return
+	}
+	if rawOrigin, hasOrigin := props["install_origin"]; hasOrigin {
+		origin, ok := rawOrigin.(string)
+		if name != "install" || !ok || (origin != "new" && origin != "existing" && origin != "unknown") {
+			s.log.Printf("drop event %q: install_origin is an install-only enum", name)
+			return
+		}
 	}
 	if err := validateProps(props); err != nil {
 		s.log.Printf("drop event %q: %v", name, err)
@@ -242,6 +257,9 @@ func (s *SDK) SetProps(props map[string]any) {
 	}
 	accepted := map[string]string{}
 	for key, value := range props {
+		if key == "install_origin" {
+			continue
+		} // reserved for the immutable install claim
 		text, ok := value.(string)
 		if !ok {
 			// §4: every install-property value matches ^[a-z0-9_.-]{1,24}$,
@@ -320,7 +338,7 @@ func (s *SDK) Reset() {
 	id := newUUIDv4()
 	s.observationMu.Lock()
 	defer s.observationMu.Unlock()
-	if !s.queue.DiscardUpdates() {
+	if !s.queue.DiscardIdentityEvents() {
 		return
 	}
 	if !s.store.Commit(func(state *State) {
@@ -330,6 +348,7 @@ func (s *SDK) Reset() {
 			state.LastAppVersion = s.platform.AppVersion
 		}
 		state.InstallID = id
+		state.InstallOrigin = "unknown"
 		state.InstallClaimed = false
 		state.InstallDueAt = formatBig(now)
 		state.InstallFirstTry = ""
@@ -680,11 +699,16 @@ func (s *SDK) step(now *big.Int) (*big.Int, bool) {
 	installEnqueued := s.installEnqueuedThisRun
 	s.mu.Unlock()
 	if !state.InstallClaimed && !installEnqueued && due(now, installDue) && !s.queue.Contains("install") {
-		s.store.Update(func(state *State) {
+		if !s.store.Commit(func(state *State) {
 			if state.InstallFirstTry == "" {
 				state.InstallFirstTry = formatBig(now)
 			}
-		})
+		}) {
+			// Persist the captured origin and deadline before publishing the claim,
+			// even when no version change required a separate state commit.
+			s.observationMu.Unlock()
+			return after(now, 1000), false
+		}
 		s.mu.Lock()
 		s.installEnqueuedThisRun = true
 		// Queue immediately while preserving §8.3 item 7's initial flush timer.
@@ -692,7 +716,7 @@ func (s *SDK) step(now *big.Int) (*big.Int, bool) {
 			s.pending = true
 		}
 		s.mu.Unlock()
-		s.enqueue(QueuedEvent{ID: newUUIDv7(now), N: "install", T: literal(now)})
+		s.enqueue(QueuedEvent{ID: newUUIDv7(now), N: "install", T: literal(now), Props: map[string]any{"install_origin": normalizeInstallOrigin(state.InstallOrigin)}})
 		s.observationMu.Unlock()
 		return nil, true
 	}
@@ -1072,4 +1096,13 @@ func parseRetryAfter(value string, present bool) (int64, bool) {
 // C15b sends one past int64.
 func literal(now *big.Int) []byte {
 	return []byte(now.String())
+}
+
+func normalizeInstallOrigin(value string) string {
+	switch value {
+	case "new", "existing":
+		return value
+	default:
+		return "unknown"
+	}
 }

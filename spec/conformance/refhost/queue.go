@@ -256,7 +256,7 @@ func (q *Queue) Recover(event QueuedEvent) bool {
 	return false
 }
 
-func (q *Queue) DiscardUpdates() bool {
+func (q *Queue) DiscardIdentityEvents() bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	kept := make([]entry, 0, len(q.entries))
@@ -264,7 +264,7 @@ func (q *Queue) DiscardUpdates() bool {
 	var buffer bytes.Buffer
 	buffer.Write(q.receiptLineLocked())
 	for _, entry := range q.entries {
-		if entry.event.N == "app_updated" {
+		if entry.event.N == "app_updated" || entry.event.N == "install" {
 			continue
 		}
 		kept = append(kept, entry)

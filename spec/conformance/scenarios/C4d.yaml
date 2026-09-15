@@ -1,0 +1,34 @@
+c: C4d
+title: install origin is a durable host hint, not the SDK identity age
+implements: spec/sdk-conformance.md §4 C4d and wire-v1.md §5.2
+arms:
+  - name: explicitly new installation
+    env: {JELTO_NOW: "1788134400000", JELTO_INSTALL_ORIGIN: new}
+    steps:
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: event_names, counts: {heartbeat: 1, install: 1}}
+      - {check: event_prop, request: 0, event: 1, key: install_origin, value: new}
+      - {check: event_prop, request: 0, event: 0, key: install_origin, absent: true}
+      - {check: state, path: install_origin, value: '"new"'}
+
+  - name: omitted host hint is unknown
+    env: {JELTO_NOW: "1788134400000"}
+    steps:
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: event_prop, request: 0, event: 1, key: install_origin, value: unknown}
+      - {check: state, path: install_origin, value: '"unknown"'}
+
+  - name: existing install survives abrupt death and a different host hint
+    env: {JELTO_NOW: "1788134400000", JELTO_INSTALL_ORIGIN: existing}
+    steps:
+      - run: [init prd_conform001, installid]
+      - kill_host: true
+      - restart: {env: {JELTO_NOW: "1788159600000", JELTO_INSTALL_ORIGIN: new}}
+      - run: [init prd_conform001, sleep 3000]
+    assert:
+      - {check: event_names, counts: {heartbeat: 1, install: 1}}
+      - {check: event_prop, request: 0, event: 1, key: install_origin, value: existing}
+      - {check: event_prop, request: 0, event: 0, key: install_origin, absent: true}
+      - {check: state, path: install_origin, value: '"existing"'}
