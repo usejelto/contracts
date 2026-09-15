@@ -18,7 +18,7 @@ type State struct {
 	LastHeartbeatDay string `json:"last_heartbeat_day,omitempty"` // UTC day index, decimal
 
 	InstallClaimed  bool              `json:"install_claimed"`
-	InstallDueAt    string            `json:"install_due_at,omitempty"`    // §8.2 item 4, the 0-6 h delay, persisted (C4c)
+	InstallDueAt    string            `json:"install_due_at,omitempty"`    // §8.2 item 4, the draw instant, persisted once (C4c)
 	InstallFirstTry string            `json:"install_first_try,omitempty"` // when attempts began; +30 d claims it anyway (C4b)
 	InstallProps    map[string]string `json:"install_props,omitempty"`     // §8.1 setProps, persisted (C22)
 

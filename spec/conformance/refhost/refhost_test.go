@@ -306,8 +306,8 @@ func TestDumpstateExportsInstantsPastInt64AsDecimalStrings(t *testing.T) {
 		}
 	}
 
-	// install_due_at is the other instant this arm sets: §8.2 item 4's 0-6 h
-	// deadline, measured from a clock int64 cannot hold.
+	// install_due_at is the other instant this arm sets: §8.2 item 4's immediate
+	// deadline, equal to a draw instant int64 cannot hold.
 	var dueAt string
 	if err := json.Unmarshal(export["install_due_at"], &dueAt); err != nil {
 		t.Fatalf("install_due_at is %s, want a decimal string: %v", export["install_due_at"], err)
@@ -318,8 +318,56 @@ func TestDumpstateExportsInstantsPastInt64AsDecimalStrings(t *testing.T) {
 	}
 	now, _ := new(big.Int).SetString(pin, 10)
 	gap := new(big.Int).Sub(due, now)
-	if gap.Sign() < 0 || gap.Cmp(big.NewInt(installMaxDelayMS)) > 0 {
-		t.Fatalf("install_due_at is %s ms from the pin, want 0-6 h; the arithmetic did not survive the width", gap)
+	if gap.Sign() != 0 {
+		t.Fatalf("install_due_at is %s ms from the pin, want 0; the draw instant did not survive the width", gap)
+	}
+}
+
+// C4/C4c: the deadline is immediate at every supported clock width, and both
+// it and the already queued event resume on a later launch without a 202.
+func TestImmediateInstallDeadlineAndQueuedEventSurviveRelaunch(t *testing.T) {
+	for _, pin := range []string{"0", "-1", "99999999999999999999"} {
+		t.Run(pin, func(t *testing.T) {
+			env := map[string]string{
+				"JELTO_ENDPOINT":  "http://127.0.0.1:1/v1/e",
+				"JELTO_STATE_DIR": t.TempDir(),
+				"JELTO_NOW":       pin,
+			}
+			first := dumpstateExport(t, hostReplies(t, env, "init prd_conform001", "sleep 0", "dumpstate"))
+			if string(first["install_due_at"]) != strconv.Quote(pin) {
+				t.Fatalf("deadline %s, want draw instant %s", first["install_due_at"], pin)
+			}
+			var installID string
+			for _, event := range exportedQueueOf(t, first).Events {
+				if event.N == "install" {
+					if installID != "" || event.T != pin {
+						t.Fatalf("install is duplicated or not queued at init: %+v", event)
+					}
+					installID = event.ID
+				}
+			}
+			if installID == "" {
+				t.Fatal("install was not queued immediately")
+			}
+			now, _ := new(big.Int).SetString(pin, 10)
+			env["JELTO_NOW"] = formatBig(after(now, 25_200_000))
+			second := dumpstateExport(t, hostReplies(t, env, "init prd_conform001", "sleep 0", "dumpstate"))
+			if string(second["install_due_at"]) != string(first["install_due_at"]) {
+				t.Fatalf("relaunch redrew the deadline: %s -> %s", first["install_due_at"], second["install_due_at"])
+			}
+			installs := 0
+			for _, event := range exportedQueueOf(t, second).Events {
+				if event.N == "install" {
+					installs++
+					if event.ID != installID || event.T != pin {
+						t.Fatalf("relaunch replaced the queued event: %+v", event)
+					}
+				}
+			}
+			if installs != 1 {
+				t.Fatalf("relaunch holds %d installs, want 1", installs)
+			}
+		})
 	}
 }
 
@@ -392,9 +440,8 @@ func (b wireBatch) names() []string {
 }
 
 // sleepHarness is refhost driven in-process against a recording endpoint, on a
-// pinned clock, with the install already claimed -- §8.2 item 4's random 0-6 h
-// delay would otherwise drop an `install` into a batch and lend these tests a
-// second source of failure that is not theirs (TODO.md §3's, not §5's).
+// pinned clock, with the install already claimed so these synchronization tests
+// isolate heartbeat and track batches from the immediate first-init install.
 type sleepHarness struct {
 	host  *host
 	sdk   *SDK

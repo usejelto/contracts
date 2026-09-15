@@ -217,7 +217,7 @@ func TestUpdateActivityCheckPreservesRetriesAndDistinctObservations(t *testing.T
 }
 
 // Use constructed recordings to exercise retry-prefix growth deterministically;
-// random install timing cannot provide reliable coverage of this case.
+// the immediate first-init install does not exercise growth during a retry.
 
 func requestWithIDs(ids ...string) Record {
 	events := make([]Event, len(ids))
@@ -386,15 +386,18 @@ func TestStateChecksReadTheExportAndNotTheDirectory(t *testing.T) {
 // every instant a decimal string precisely so a clock past int64 survives the
 // read, so the arithmetic here is big.Int on both sides.
 func TestStateDeadlineReadsTheExportAtArbitraryPrecision(t *testing.T) {
-	evidence := export(t, `{"install_due_at": "1788141600000", "queue": {"bytes": 0, "events": []}}`)
+	evidence := export(t, `{"install_due_at": "1788134400000", "queue": {"bytes": 0, "events": []}}`)
 	evidence.Arm = Arm{Env: map[string]string{"JELTO_NOW": "1788134400000"}}
 
-	// 7 200 000 ms after the pin: inside §8.2 item 4's 0-6 h.
+	// §8.2 item 4's deadline equals the draw instant, with no offset.
 	mustPass(t, checkStateDeadline("install_due_at", evidence, Check{
-		Path: "install_due_at", Anchor: "jelto_now", Min: intp(0), Max: intp(21600),
+		Path: "install_due_at", Anchor: "jelto_now", Min: intp(0), Max: intp(0),
 	}))
-	mustFail(t, checkStateDeadline("install_due_at", evidence, Check{
-		Path: "install_due_at", Anchor: "jelto_now", Min: intp(0), Max: intp(3600),
+	// Redrawing at the second launch, seven hours later, must fail C4c.
+	redrawn := export(t, `{"install_due_at": "1788159600000", "queue": {"bytes": 0, "events": []}}`)
+	redrawn.Arm = evidence.Arm
+	mustFail(t, checkStateDeadline("install_due_at", redrawn, Check{
+		Path: "install_due_at", Anchor: "jelto_now", Min: intp(0), Max: intp(0),
 	}))
 
 	// C15b's width. A reader that took these as JSON numbers would round both

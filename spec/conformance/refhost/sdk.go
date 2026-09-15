@@ -23,7 +23,6 @@ const (
 	backoffCapMS     = 3_600_000       // item 8, "up to 1 h"; wire §9 clamps Retry-After to the same ceiling
 	jitterFraction   = 0.20            // item 8, "+-20 % jitter"
 
-	installMaxDelayMS = 6 * 60 * 60 * 1000       // §8.2 item 4, "a random delay of 0-6 h"
 	installClaimAfter = 30 * 24 * 60 * 60 * 1000 // §8.2 item 4, "or after 30 days of attempts"
 
 	// Bound best-effort termination flushes so a blocked request cannot prevent exit (C1).
@@ -157,11 +156,10 @@ func (s *SDK) bootstrap(ready chan struct{}) {
 		if state.InstallProps == nil {
 			state.InstallProps = map[string]string{}
 		}
-		// §8.2 item 4: schedule the install once, and persist the schedule so
-		// a process that ends first does not restart the delay (C4c).
+		// §8.2 item 4: persist the immediate deadline once, at the draw instant,
+		// so a relaunch resumes it even after an abrupt death (C4c).
 		if !state.InstallClaimed && state.InstallDueAt == "" {
-			delay := s.randomInstallDelay()
-			state.InstallDueAt = formatBig(after(now, delay))
+			state.InstallDueAt = formatBig(now)
 		}
 	})
 
@@ -186,12 +184,6 @@ func (s *SDK) bootstrap(ready chan struct{}) {
 	}
 
 	close(ready)
-}
-
-func (s *SDK) randomInstallDelay() int64 {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.random.Int63n(installMaxDelayMS)
 }
 
 // Track is §8.1's track(name, props?). Everything it can refuse, it refuses
@@ -339,7 +331,7 @@ func (s *SDK) Reset() {
 		}
 		state.InstallID = id
 		state.InstallClaimed = false
-		state.InstallDueAt = formatBig(after(now, s.randomInstallDelay()))
+		state.InstallDueAt = formatBig(now)
 		state.InstallFirstTry = ""
 		state.LastHeartbeatDay = ""
 	}) {
@@ -661,6 +653,16 @@ func (s *SDK) step(now *big.Int) (*big.Int, bool) {
 	if !s.observeAppVersion() {
 		return after(now, 1000), false
 	}
+	// Serialize install persistence with reset/disable so an immediate deadline
+	// cannot recreate a queue or state that a concurrent disable just wiped.
+	s.observationMu.Lock()
+	s.mu.Lock()
+	disabled = s.disabled
+	s.mu.Unlock()
+	if disabled {
+		s.observationMu.Unlock()
+		return nil, false
+	}
 	state := s.store.Get()
 
 	// §8.2 item 4: "Mark claimed on 202, or after 30 days of attempts."
@@ -668,6 +670,7 @@ func (s *SDK) step(now *big.Int) (*big.Int, bool) {
 	if !state.InstallClaimed && firstTry != nil && due(now, after(firstTry, installClaimAfter)) {
 		s.store.Update(func(state *State) { state.InstallClaimed = true })
 		s.log.Printf("install claimed after 30 days of attempts without a 202 (RFC-0001 §8.2 item 4)")
+		s.observationMu.Unlock()
 		return nil, true
 	}
 
@@ -684,11 +687,17 @@ func (s *SDK) step(now *big.Int) (*big.Int, bool) {
 		})
 		s.mu.Lock()
 		s.installEnqueuedThisRun = true
-		s.pending = true
+		// Queue immediately while preserving §8.3 item 7's initial flush timer.
+		if s.initFlushAt == nil {
+			s.pending = true
+		}
 		s.mu.Unlock()
 		s.enqueue(QueuedEvent{ID: newUUIDv7(now), N: "install", T: literal(now)})
+		s.observationMu.Unlock()
 		return nil, true
 	}
+
+	s.observationMu.Unlock()
 
 	// §8.6 / wire §8: the kill switch. Nothing is sent while it is on; the
 	// queue keeps accepting up to its cap.

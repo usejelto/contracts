@@ -7,12 +7,13 @@ arms:
     steps:
       - run:
           - init prd_conform001
+          - sleep 0 # settle the immediate install before tracking, fixing event indexes
           - 'track x {"k":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
           - 'track y {"k1":"a","k2":"a","k3":"a","k4":"a","k5":"a","k6":"a","k7":"a","k8":"a","k9":"a","k10":"a","k11":"a","k12":"a","k13":"a","k14":"a","k15":"a","k16":"a","k17":"a","k18":"a","k19":"a","k20":"a","k21":"a"}'
           - track z
           - sleep 6000
     assert:
-      - {check: event_names, values: [heartbeat, z], why: "both dropped, never sent"}
+      - {check: event_names, values: [heartbeat, install, z], why: "both dropped, never sent"}
       - check: stderr
         contains:
           - "spec/wire-v1.md §3 caps a string at 200"

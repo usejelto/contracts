@@ -7,6 +7,7 @@ arms:
     steps:
       - run:
           - init prd_conform001
+          - sleep 0 # settle the immediate install before tracking, fixing event indexes
           - track app_update {"from_version":"2.0.0","to_version":"2.1.0","status":"download_started"}
           - track app_update {"from_version":"2.0.0","to_version":"2.1.0","status":"downloaded"}
           - track app_update {"from_version":"2.0.0","to_version":"2.1.0","status":"install_started"}
@@ -20,13 +21,14 @@ arms:
       - {check: event_names, counts: {heartbeat: 1, app_update: 8}}
       - {check: update_activity, values: [download_started, downloaded, install_started, download_failed, install_failed, failed, postponed, download_started]}
       - {check: state, path: last_app_version, value: '"2.0.0"'}
-      - {check: event_prop, request: 0, event: 5, key: reason, value: permission}
+      - {check: event_prop, request: 0, event: 6, key: reason, value: permission}
   - name: failed delivery preserves the observation
     env: {JELTO_NOW: "1788134400000", JELTO_APP_VERSION: "2.0.0"}
     mock: "503"
     steps:
       - run:
           - init prd_conform001
+          - sleep 0 # settle the immediate install before tracking, fixing event indexes
           - track app_update {"from_version":"2.0.0","to_version":"2.1.0","status":"install_failed","reason":"permission"}
           - sleep 3000
           - sleep 4000

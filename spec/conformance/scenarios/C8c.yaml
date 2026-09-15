@@ -19,20 +19,12 @@ notes: |
   at 1 s, and a step does not say *when*, which is why the deadline is a fact
   of its own. An SDK storing either in a plist or in SQLite passes these rows.
 
-  Arm D opens with SEVEN simulated hours under `ok` before the refusal script
-  goes in, and that is load-bearing rather than scene-setting. RFC-0001 §8.2
-  item 4 delays the `install` by a random 0-6 h, so an arm that advances any
-  span shorter than 6 h has the install land inside it on some runs and not
-  others -- the batch under retry then carries two events or three depending on
-  a coin toss. Seven hours is longer than the longest delay the rule allows, so
-  the install is ALWAYS delivered and claimed in the first request, and the ten
-  refusals that follow always carry exactly one event. This is determinism won
-  from the contract rather than from a seed: it needs no knob the conformance
-  host does not already have, so it holds for an SDK host as much as for
-  refhost. Earlier this arm advanced 6 000 000 ms with the install unclaimed
-  and flaked on 27.8 % of runs (6 000 000 / 21 600 000) -- measured at 2/10
-  here and 4/6 on the coordinator's machine, with perfect separation on
-  whether the delay fell inside the span.
+  Arm D keeps its seven-hour simulated preamble under `ok` before installing
+  the refusal script. The install now queues immediately on first init and is
+  accepted with the initial heartbeat; seven hours is no longer required to
+  make it due. Keeping the preamble preserves the reviewed clock and request
+  indexes. The ten refusals then carry exactly one event, x, with no install
+  joining the batch later.
 arms:
   - name: 9999 is honoured but clamped to 3600 s
     mock: "429:9999"
@@ -76,8 +68,8 @@ arms:
     env: {JELTO_NOW: "1788134400000", JELTO_DEBUG: "1"}
     mock: ok
     steps:
-      # Seven simulated hours clear the install out of the way for good: its
-      # delay is at most six (RFC-0001 §8.2 item 4), so this is not a race.
+      # Retain the existing clock advance; the immediately queued install is
+      # accepted with the initial heartbeat before the refusal script starts.
       - run: [init prd_conform001]
       - run: [sleep 25200000]
       - mock_script:

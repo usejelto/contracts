@@ -6,10 +6,10 @@ arms:
     env: {JELTO_NOW: "1788134400000"}
     mock: "400"
     steps:
-      - run: [init prd_conform001, track x, sleep 5000]
+      - run: [init prd_conform001, sleep 0, track x, sleep 5000]
       - mock: ok
       - run: [track y, sleep 6000]
     assert:
       - {check: request_count, equal: 2, why: "exactly one request with x (no retry)"}
       - {check: statuses, values: ["400", "202"]}
-      - {check: event_names, values: [heartbeat, x, y], why: "y is sent in a fresh batch"}
+      - {check: event_names, values: [heartbeat, install, x, y], why: "y is sent in a fresh batch"}

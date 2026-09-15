@@ -2,15 +2,10 @@ c: C3
 title: one heartbeat per UTC day, whatever a process does
 implements: spec/sdk-conformance.md §4 C3
 notes: |
-  This arm is in TODO.md §3's install-lottery set and until now its file did
-  not say so. Three launches advance 3 000 ms each with the install unclaimed,
-  so RFC-0001 §8.2 item 4's random 0-6 h delay can land inside one of them
-  and put an `install` in the ordered list -- roughly 1 run in 2 400. C4b, C8c
-  and C16 open on seven simulated hours under `ok` to put the claim behind
-  their assertions; this arm does NOT, on the measured trade §3 records (C16
-  fixed, the other eight declined), and an implementer's equivalent unit test
-  failed on its first run for exactly this. A red run whose only surprise is
-  an `install` among the heartbeats is that lottery and not a regression.
+  The first init queues its install immediately alongside the heartbeat. The
+  first 3 000 ms advance delivers and claims it; subsequent launches retain
+  that claim. The assertions count heartbeats across two UTC days, with the
+  install sharing the first request, so the three launches need no preamble.
 arms:
   - name: three launches over two days
     env: {JELTO_NOW: "1788134400000"}

@@ -11,5 +11,5 @@ arms:
       - run: [track y, sleep 6000]
     assert:
       - {check: request_count, equal: 2, why: "the app SDK kept sending inside a web-scoped stop"}
-      - {check: event_names, values: [heartbeat, y]}
+      - {check: event_names, values: [heartbeat, install, y]}
       - {check: stderr, contains: ["ignoring a stop scoped to web"]}

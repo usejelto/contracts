@@ -5,7 +5,7 @@ arms:
   - name: track "Bad Name!"
     env: {JELTO_NOW: "1788134400000", JELTO_DEBUG: "1"}
     steps:
-      - run: [init prd_conform001, 'track "Bad Name!"', track good_name, sleep 6000]
+      - run: [init prd_conform001, sleep 0, 'track "Bad Name!"', track good_name, sleep 6000]
     assert:
-      - {check: event_names, values: [heartbeat, good_name], why: "dropped client-side; never sent"}
+      - {check: event_names, values: [heartbeat, install, good_name], why: "dropped client-side; never sent"}
       - {check: stderr, contains: ["^[a-z0-9_:.-]{1,64}$"], why: "logged in debug"}

@@ -1,7 +1,6 @@
 # Conformance limitations and resolved constraints
 
-Current limitations are the random install timing in §3 and §7, and the Electron
-memory budget in §7. Resolved sections retain the constraints that callers reference.
+The remaining limitation is the Electron memory budget in §7. Resolved sections retain the constraints that callers reference.
 
 ## 1. Scenario semantics — resolved
 
@@ -26,27 +25,20 @@ SDK file formats remain private. Directory emptiness is checked separately on di
 since an export cannot prove that forgotten files do not exist. Stderr is an
 explicit assertion surface.
 
-## 3. Random install timing — remaining limitation
+## 3. Immediate install timing — resolved
 
-A random 0–6 hour install delay can put an install inside an arm that asserts an
-exact event list. C16 avoids this by spending seven simulated hours under `ok`
-before its assertions. Its stop duration also absorbs that preamble, and a stderr
-guard verifies that the stop is actually active despite the two clock frames.
+RFC-0001 §8.2 item 4 now queues the install immediately on first init, with a
+persisted deadline equal to the draw instant. There is no install lottery or
+seed knob: the first batch carries the install with the initial heartbeat.
 
-The corresponding changes to these eight arms were declined because changing their
-reviewed assertions and request indexes carried risk. Approximate exposure follows
-from the arm span divided by six hours:
+C3 counts heartbeats across launches and needs no preamble. C8c and C16 retain
+their seven-hour simulated preambles under `ok` to preserve reviewed request
+indexes and clock arithmetic, although seven hours is no longer needed to make
+the install due. C16's stop duration still absorbs its retained preamble, and
+its stderr guard verifies the switch is active despite the two clock frames.
 
-| Arms | Span | Exposure per arm |
-|---|---|---|
-| C9, C9b | 11 s | 0.05% |
-| C16b | 9 s | 0.04% |
-| C20, C20b, W2, W3 | 6 s | 0.03% |
-| C21 | 3 s | 0.01% |
-
-Reconsider these arms using measured failures after the synchronization fix in §5.
-Use the contract's seven-hour preamble instead of disabling randomness with a seed.
-C3 has the same exposure; see §7.
+Exact event-list assertions must account for the immediate install in the first
+batch. Change existing arm structure only where a run demonstrates a failure.
 
 ## 4. Documentation corrections — resolved
 
@@ -77,10 +69,6 @@ requires persisting the install deadline when drawn, rather than during shutdown
 `killCurrent` captures neither `dumpstate` nor a synthetic exit code: either would
 misrepresent an abrupt death or shift later scenario result indexes. The
 abrupt-restart contract is exercised by [C4c](scenarios/C4c.yaml).
-
-C3 advances 3,000 ms on three launches while the install remains unclaimed, giving
-approximately 1-in-2,400 exposure to the same install timing described in §3. Its
-scenario notes do not currently explain that limitation.
 
 The host contract now also requires:
 

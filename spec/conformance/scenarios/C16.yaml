@@ -9,17 +9,11 @@ notes: |
   so the batch that got the switch was ACCEPTED and a correct SDK removes it
   from the queue. The composed mode reproduces wire §8's executed bytes.
 
-  (2) The arm OPENS ON SEVEN SIMULATED HOURS under `ok`, and that is
-  load-bearing rather than scene-setting: it is C8c arm D's device, adopted
-  here for C8c arm D's reason. RFC-0001 §8.2 item 4 delays the `install` by a
-  random 0-6 h, so an arm that pins a clock and asserts an exact ORDERED event
-  list has the install land inside that list on some runs and not others. This
-  arm spans 70 s, which was 70 / 21 600 -- 1 run in 309, and a flake here
-  reads as (4) being wrong. Seven hours is longer than the longest delay the
-  rule allows, so the install is ALWAYS delivered and claimed before the first
-  assertion is about anything. That is determinism won from the contract
-  rather than from a seed: it needs no knob the conformance host does not
-  already have, so it holds for an SDK's own host as much as for refhost.
+  (2) The arm retains its seven-hour simulated preamble under `ok`. The
+  install now queues immediately on first init, so this duration is no longer
+  required to make it due. Keeping it preserves the request indexes and the
+  stop-clock arithmetic in (3); the initial batch is accepted before the
+  switch is armed.
 
   The preamble costs one request and shifts every index. It is exactly one:
   the pump enqueues the due install and flushes in two turns of the same loop,
@@ -64,8 +58,8 @@ arms:
     mock_clock_from_now: true
     steps:
       - run: [init prd_conform001]                 # step 0
-      # Seven simulated hours clear the install out of the way for good: its
-      # delay is at most six (RFC-0001 §8.2 item 4), so this is not a race.
+      # Retain the preamble and stop-clock arithmetic; the immediately queued
+      # install is accepted with the initial heartbeat before the switch.
       - run: [sleep 25200000]                      # step 1  -- request 0 goes out, under `ok`
       - run: [track x]                             # step 2
         repeat: 5

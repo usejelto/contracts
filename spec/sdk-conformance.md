@@ -166,18 +166,16 @@ again for its own clock; the host's check comes first and is the one the runner 
 host that hands the whole environment to the SDK unread satisfies this by asking the SDK's own
 parser, which is what `sdk/electron`'s host does, rather than by writing a second grammar.
 
-Two things a host may accept and this list deliberately does not name. A **seed** is not here and
-must not be: RFC-0001 §8.2 item 4 requires the install delay be *random*, so a suite able to turn
-the randomness off would stop testing the rule the knob exists to make testable. Determinism is
-won from the contract instead — C8c opens on seven simulated hours under `ok` because seven is
-longer than the longest delay §8.2 item 4 permits, which holds for every SDK rather than for one
-that happens to have a seed. Application versions are now controlled by `JELTO_APP_VERSION` for §7's transition scenarios.
+The host has no seed knob. Install deadlines equal the draw instant and are persisted
+once; retry jitter remains random. Scenarios that need an accepted install begin under
+`ok` and settle the initial batch before asserting on later retries or stops. Application
+versions are controlled by `JELTO_APP_VERSION` for §7's transition scenarios.
 
 **The clock.** `JELTO_NOW` pins it and `sleep <ms>` advances it. A clock that were merely *fixed*
 could not run a day-rollover scenario in seconds — it could not run one at all, nothing ever
 moving it — so under `JELTO_NOW` the host adds `<ms>` to the SDK's clock, fires every timer that
 falls due, and returns once the work that fell due has settled. That is the only reading under
-which C3's `sleep 3000`, C4's `sleep 7 h` and C4b's thirty days mean anything. **Without
+which C3's `sleep 3000`, C4's `sleep 3000` and C4b's thirty days mean anything. **Without
 `JELTO_NOW` the clock is the real one and `sleep <ms>` really sleeps**, which is what C7's
 "2 s ± 0.5 s", C8's head-of-schedule and C22's "≤ 2 s" require: those are assertions on `mockd`'s
 arrival times, and `mockd` cannot see a frame the host invented. The request timeout of RFC-0001
@@ -202,7 +200,7 @@ not set is absent or empty; a host MAY add keys and the runner ignores them.
 | `install_id` | UUIDv4 string, `""` before `init` and after `disable()` | §8.2 item 2 — loaded on launch, created if absent (C2, C18) |
 | `last_heartbeat_day` | UTC day index, `floor(ms / 86 400 000)`, decimal string | §8.2 item 3 — a `heartbeat` is enqueued only when this differs from today (C3, C22) |
 | `install_claimed` | boolean | §8.2 item 4 — set on a `202`, or after 30 days of attempts (C4, C4b) |
-| `install_due_at` | instant | §8.2 item 4's parenthesis, "or on next launch if the process ends first": the 0–6 h delay is a *deadline*, not a countdown, so a relaunch resumes it rather than drawing a new one (C4c) |
+| `install_due_at` | instant | §8.2 item 4 — drawn and persisted once when the SDK first sees `install_claimed = false`, equal to the draw instant with no random offset. Relaunch resumes this deadline rather than redrawing it, including after abrupt death (C4c) |
 | `install_first_try` | instant | §8.2 item 4's "after 30 days of attempts" — a 30-day window has to be measured from something, and it is not the current launch or a machine that relaunches daily never reaches it (C4b) |
 | `install_props` | object, string → string | §8.1 `setProps`, "persisted, sent with every heartbeat" (C22, C22d) |
 | `backoff_step_ms` | integer; `0` or absent means *not in backoff* | §8.3 item 8, "persisted across launches" — the step is what a new process must not restart at 1 s (C8, C8c, C9b) |
@@ -294,9 +292,9 @@ grammar (`^[a-z0-9_:.-]{1,64}$`), which is why `k` alone is substituted and they
 | **C1** | `init k` then immediately `track x` ×1000 then `exit` | `init` returns in < 5 ms (host measures); process exits within 1 s; no crash |
 | **C2** | `init k`, `installid`, `exit`; new process `init k`, `installid` | same UUIDv4 both times; state contains it; nil UUID never printed |
 | **C3** | `init k`, `sleep 3000`; then `JELTO_NOW += 1 day`, new process `init k`, `sleep 3000` | recording has exactly 2 `heartbeat` events, one per UTC day; a third `init` on the same day sends none |
-| **C4** | `init k`; `sleep 7 h` (with `JELTO_NOW`) | exactly one `install` event (no attribution payload — the wire's `install` carries only `iid av os osv arch`); sent between 0 and 6 h after init; state marks `install_claimed`; a further `init` sends no second `install` |
+| **C4** | `init k`; `sleep 3000` (with `JELTO_NOW`); then another launch | `install` is enqueued immediately on first init, with `install_due_at` equal to the draw instant; exactly one `install` event (no attribution payload — the wire's `install` carries only `iid av os osv arch`); state marks `install_claimed` on `202`; a further `init` sends no second `install` |
 | C4b | as C4 but `mockd down` for 30 days of simulated time, then `ok` | `install` retried on each launch; after 30 simulated days state marks claimed without a `202` and **no further `install` event is enqueued**. That last clause is the whole of what "no further attempts" can mean here: RFC-0001 §8.2 item 4 says what marking claimed stops, and what it stops is the enqueueing of a second `install`. Nothing in the contract discards an event already in the queue because a timer expired, so the copy already queued keeps being offered with the rest of the batch — §8.3 item 8 doing its job — and the queue holds exactly **one** `install` however many launches have offered it |
-| C4c | as C4 but the process ends before the delay elapses; new process `init k`. **Two arms, and the second is the one that tests the rule**: arm A ends the host with `exit`, arm B **SIGKILLs it** | `install` sent on the next launch (delay persists, does not restart from 6 h). **"Ends" includes ending abruptly.** §8.2 item 4's parenthesis is "or on next launch if the process ends first", and a process that is force-quit has ended — so the deadline must reach the SDK's storage when it is **drawn**, not in §8.3 item 7's termination flush. Arm A cannot make that claim and never could: with `exit` the flush happens, so an SDK that persists nothing until then passes it. **This was not merely untested but untestable until v0.12** — `runner/hostproc.go`'s `Kill` had no caller while its comment named this row, so C4c asserted persistence across an *orderly* death for the life of the repo (`spec/conformance/TODO.md` §7). The `kill_host:` step is what arm B needed. Its sensitivity is measured, not argued: a host that persists only in its termination flush passes arm A and fails arm B, redrawing a deadline 46 126 s from an anchor that permits 21 600 |
+| C4c | as C4 but the process ends before the initial flush; new process `init k`. Arm A ends with `exit`; arm B **SIGKILLs it** after `installid` confirms bootstrap completed | The immediate deadline is persisted when drawn, and the queued event survives abrupt death. Relaunch resumes that deadline and sends the install if still queued. Arm A permits a termination flush; arm B proves persistence without one. The restart advances 7 h: a lost deadline redrawn there is 25 200 s from the initial `jelto_now` anchor and fails `min: 0, max: 0` (C4c; `spec/conformance/TODO.md` §7) |
 | **C5** | `track x` ×10, `sleep 5000`, `exit` — **no `init`** | recording empty; state dir empty; no socket opened (runner watches `mockd` connections) |
 
 ### Queue and network

@@ -14,6 +14,7 @@ arms:
     steps:
       - run:
           - init prd_conform001
+          - sleep 0 # settle the immediate install before tracking, fixing event indexes
           - onboarding permissions ok
           - onboarding driver fail no_kext
           - onboarding tour skip
@@ -21,11 +22,11 @@ arms:
           - sleep 6000
     assert:
       - check: event_names
-        values: [heartbeat, "onboarding:permissions", "onboarding:driver", "onboarding:tour", "onboarding:permissions"]
-      - {check: event_prop, request: 0, event: 1, key: status, value: ok}
-      - {check: event_prop, request: 0, event: 1, key: reason, absent: true, why: "reason only on the second"}
-      - {check: event_prop, request: 0, event: 2, key: status, value: fail}
-      - {check: event_prop, request: 0, event: 2, key: reason, value: no_kext}
-      - {check: event_prop, request: 0, event: 3, key: status, value: skip}
-      - {check: event_prop, request: 0, event: 3, key: reason, absent: true}
-      - {check: events_congruent, request: 0, values: ["1", "4"], why: "identical to the track it is sugar for, but for id and t"}
+        values: [heartbeat, install, "onboarding:permissions", "onboarding:driver", "onboarding:tour", "onboarding:permissions"]
+      - {check: event_prop, request: 0, event: 2, key: status, value: ok}
+      - {check: event_prop, request: 0, event: 2, key: reason, absent: true, why: "reason only on the second"}
+      - {check: event_prop, request: 0, event: 3, key: status, value: fail}
+      - {check: event_prop, request: 0, event: 3, key: reason, value: no_kext}
+      - {check: event_prop, request: 0, event: 4, key: status, value: skip}
+      - {check: event_prop, request: 0, event: 4, key: reason, absent: true}
+      - {check: events_congruent, request: 0, values: ["2", "5"], why: "identical to the track it is sugar for, but for id and t"}

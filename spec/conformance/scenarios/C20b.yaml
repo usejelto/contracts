@@ -11,5 +11,5 @@ arms:
           - onboarding x ok "Free text reason"
           - sleep 6000
     assert:
-      - {check: event_names, values: [heartbeat], why: "both dropped client-side"}
+      - {check: event_names, values: [heartbeat, install], why: "both dropped client-side"}
       - {check: stderr, contains: ["^[a-z0-9_-]{1,32}$", "^[a-z0-9_.-]+$"], why: "a debug log naming the rule"}
