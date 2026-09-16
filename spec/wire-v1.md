@@ -1,6 +1,6 @@
 # spec/wire-v1 — ingest wire format
 
-Status: v1 draft, rev 0.24 (frozen at end of M1) · Gates: M1 · Normative for: server validation,
+Status: v1 draft, rev 0.25 (frozen at end of M1) · Gates: M1 · Normative for: server validation,
 `spec/wire-v1.schema.json`, every SDK, the snippet, `spec/sdk-conformance.md`.
 
 Key words MUST, SHOULD, MAY are RFC 2119. This document is the contract; RFC-0001 §2 is the
@@ -130,7 +130,7 @@ exact bytes of each so this table cannot drift from the handler.
 | `n` | MUST | string | `^[a-z0-9_:.-]{1,64}$`. Reserved names in §4. |
 | `t` | SHOULD | **whole number**, ms epoch | Clamped to `[ingest_ts − 30 d, ingest_ts + 5 min]`; outside → `ts = ingest_ts`. Missing → `ingest_ts`. **Every `t` is clamped and none is ever rejected for its magnitude** — not one before the epoch, and not one outside `int64`, which saturates at the `int64` bound and is then clamped like any other. Rejecting a whole event because a device has a wrong clock is data loss, and `spec/sdk-conformance.md` C15 forbids an SDK correcting its own clock, so the sender cannot fix it either. **JSON has no integer type** (RFC 8259 §6), so a *whole number* field is one whose **value** is whole, not one whose **literal** was written without a fraction or an exponent: `1785578400000`, `1785578400000.0` and `1.7855784e12` are the same instant and the server reads all three. A genuine fraction such as `1.5` is `invalid_field`. This rule governs every whole-number field in this document — `t`, `w`, `h`, `e`, `sd` — and the conversion is exact rather than routed through a float64, so a value `int64` can hold is read as written and only a value it cannot hold moves, by saturating rather than rounding. |
 | `s` | MUST | `"web"` \| `"app"` | Selects the field set below. |
-| `props` | MAY | object | ≤ 20 keys; key `^[a-z0-9_]{1,32}$`; values string ≤ 200 chars, number, or boolean. Stored as the value's **JSON text**, unquoted and unrounded: `29.90` is stored `29.90` and never a float, `"29,90"` is stored `29,90`, `true` is stored `true`. The server keeps the text it was sent and nothing derived from it, so a typed column can be added and backfilled from stored rows whenever a value-reading metric is specified (`spec/metrics.md` §4.7 — none exists in v1). Allowlisted per `(product, n)` — see §7. |
+| `props` | MAY | object | ≤ 20 keys; key `^[a-z0-9_]{1,32}$`; values string ≤ 200 chars, number, or boolean. Stored as the value's **JSON text**, unquoted and unrounded: `29.90` is stored `29.90` and never a float, `"29,90"` is stored `29,90`, `true` is stored `true`. The server keeps the text it was sent and nothing derived from it, so a typed column can be added and backfilled from stored rows whenever a value-reading metric is specified (`spec/metrics.md` §4.7 — none exists in v1). Custom and heartbeat keys are discovered per `(product, n)`; other built-ins retain fixed schemas — see §7. |
 | `i` | MAY | boolean | Interactive. `false` for events fired without user intent (an auto-fired event). Default `true`. A visit with one pageview and an interactive non-pageview event is not a bounce. The server **forces `i = false` on `engagement`** whatever the client sends, so an engagement can never un-bounce a visit. |
 | `v` | SHOULD | string ≤ 32 matching `^[a-z]+/[0-9A-Za-z.+-]{1,24}$` | Client version: `web/1.2.0`, `swift/1.0.3`, `electron/1.0.3`. Counted per version in the Ops card so a bad release is visible. The pattern is **normative** and the server enforces it: a value outside it rejects the event `invalid_field` naming `v`. It is not decoration. `client_ver` is `LowCardinality(String)` in both `events` and `ingest_counters` and nothing folds it the way §4 folds an install-property value, so this grammar is that column's only cardinality guard. It is deliberately narrow — a bare `1.2.0` does not say **which** client shipped it, which is the one thing the Ops card needs in order to name a bad release. **An empty `v` is an absent `v`**, said here rather than left to fall out of the pattern's `{1,24}` tail, exactly as §5.1 `f` and §5.2 `a` say it for themselves. |
 | `l` | MAY | string ≤ 16 | Language: web `navigator.language`; app the OS locale (`en-US`). Stored `LowCardinality`. |
@@ -143,7 +143,7 @@ exact bytes of each so this table cannot drift from the handler.
 | `click:download` | web | `u` | `file` (string, the basename) |
 | `click:outbound` | web | `u` | `url` (hostname only) |
 | `engagement` | web | `u pv e sd` | — |
-| `heartbeat` | app | `iid av os osv arch` | **install properties**: `license` (reserved, e.g. `trial` `paid` `expired` `free`) plus the keys the product allowlists for `heartbeat` in `event_schema`. **Every install-property value, `license` included, matches `^[a-z0-9_.-]{1,24}$`** — one grammar, the one the server has always applied to all of them. The property count is §3's `props` cap of **20**, which is also what `event_schema.allowed_props` and the account API bound; a heartbeat carrying more is `invalid_field` naming `props`, and a key the product has not allowlisted is `prop_not_allowlisted` whether or not the count is under the cap, so what bounds a heartbeat in practice is the allowlist and 20 is its ceiling. ≤ 50 distinct values per key per product, beyond that `other`. The heartbeat carries the app's **current** values every time; the server keeps the latest per install. `products.paid_license_value` — the Settings value the server's `license_conversion` metric compares a stored `license` against — takes this same grammar, because a value outside it can never match one an app sent. |
+| `heartbeat` | app | `iid av os osv arch` | **install properties**: `license` (reserved, e.g. `trial` `paid` `expired` `free`) plus keys discovered for `heartbeat` under §7. **Every install-property value, `license` included, matches `^[a-z0-9_.-]{1,24}$`.** The event carries at most **20** properties (§3); more returns `invalid_field` naming `props`. A newly observed key is discovered rather than rejected as `prop_not_allowlisted`; exceeding the product's 20-key heartbeat catalog returns `event_schema_limit` (§7). ≤ 50 distinct values per key per product, beyond that `other`. The heartbeat carries the app's **current** values every time; the server keeps the latest per install. `products.paid_license_value`, which `license_conversion` compares against the stored `license`, uses the same value grammar. |
 | `install` | app | `iid av os osv arch` | optional `install_origin` enum in §5.2 |
 | `app_updated` | app | `id iid av os osv arch` | `from_version`, `to_version` (required nonblank strings ≤ 32 Unicode scalars); `av` equals `to_version`, and the two versions differ by exact scalar equality |
 | `app_update` | app | `id iid av os osv arch` | `from_version`, `to_version` (required distinct nonblank strings ≤ 32 Unicode scalars), `status` (required: `download_started`, `downloaded`, `install_started`, `download_failed`, `install_failed`, `failed`, or `postponed`), `reason` (optional string matching `^[a-z0-9_.-]{1,64}$`) |
@@ -532,6 +532,12 @@ has no product to attribute and is left to process metrics.
   on preference for a shorter or longer window to add a field.
 
 ## Amendments to RFC-0001
+
+- rev 0.25: documentation correction only. §§3–4 now agree with §7: custom
+  and heartbeat property keys are discovered on receipt; other built-ins keep
+  fixed schemas. No wire shape, schema or runtime behavior changes. Historical
+  amendment examples below describe their original revision, not current
+  property-admission behavior.
 
 - rev 0.23: **the client side of §1 and §2 — an invalid endpoint or key is refused at `init`,
   never sent and never retried** (§1, §2) — *every app SDK; no server or schema change, and the
@@ -1233,4 +1239,4 @@ has no product to attribute and is left to process metrics.
 
 ## Platform account gates
 
-[admin.md](admin.md) §4 requires an uncached account-state check before accepting `/v1/e` data. Expired effective billing rights return the existing `402 {"error":"payment_required"}` response. Administrative suspension rejects every event with existing `stopped` under the `202` envelope; no event is stored. It does not mutate client kill-switch configuration. Unknown products retain their existing response. SDK wire shapes and retry rules do not change.
+The server performs an uncached account-state check before accepting `/v1/e` data. Expired effective billing rights return the existing `402 {"error":"payment_required"}` response. Administrative suspension rejects every event with existing `stopped` under the `202` envelope; no event is stored. It does not mutate client kill-switch configuration. Unknown products retain their existing response. SDK wire shapes and retry rules do not change.
