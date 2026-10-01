@@ -1,8 +1,6 @@
 # Portable workflow: this component directory must be the repository root.
 name: contracts checks
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -37,7 +35,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest]
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -47,14 +45,14 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.14'
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: Component tests and packages
         run: make test build package
       - name: Go dependency vulnerability check
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
       - name: Conformance twice
         run: make conformance-twice
 

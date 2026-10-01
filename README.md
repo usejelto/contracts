@@ -42,8 +42,10 @@ changes and run the consuming backend's fixture gates before adopting new data.
 Ordinary builds and tests never fetch or refresh signature data.
 
 The local `.github/workflows/ci.yml` runs tests, builds, packaging and reference
-conformance twice when this directory becomes a repository root. It uploads the
-versioned archive and checksum; it does not publish a repository or release.
+conformance twice when this directory becomes a repository root. It runs on pull
+requests, on manual dispatch and inside each release, not on branch pushes. It
+uploads the versioned archive and checksum; it does not publish a repository or
+release.
 
 ## Consumers
 

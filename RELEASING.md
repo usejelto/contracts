@@ -51,8 +51,17 @@ is its version source. Tauri's Cargo and npm versions must match, including its
 example manifest/lockfiles; its wire version comes from Cargo. Initial Tauri is
 1.0.0; this does not change the example application's own version.
 
-Run normal component CI on main before tagging. SwiftPM resolves a public version
-tag immediately; a GitHub Release cannot gate tag visibility.
+Run normal component CI on main before tagging. Branch pushes do not start it,
+so dispatch it and wait for it to pass; a tag whose checks fail spends its
+version, because tags are never moved:
+
+~~~sh
+gh workflow run ci.yml --ref main -f conformance=true
+gh run watch --exit-status   # select the run just started
+~~~
+
+SwiftPM resolves a public version tag immediately; a GitHub Release cannot gate
+tag visibility.
 
 Before the first automated tag of a package, and whenever a release is about to
 be cut, ask the helper what the tag push will need:
@@ -111,7 +120,7 @@ environment release. Permit direct publishing. No reviewer is required by these
 workflows; applying one in environment settings makes releases wait.
 
 - npm: configure each package's Trusted Publisher for this repository. The
-  workflow uses Node 24, pinned npm 11.14.0, public access and provenance.
+  workflow uses Node 24, pinned npm 11.21.0, public access and provenance.
   Public repositories are required for provenance. Do not set NPM_TOKEN or
   NODE_AUTH_TOKEN. See https://docs.npmjs.com/trusted-publishers/.
 - NuGet: configure the trusted policy and repository variable NUGET_USER with

@@ -23,7 +23,7 @@ defaults:
 
 jobs:
   validate:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
@@ -33,7 +33,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.14'
       - run: python3 release.py validate
 
   previous:
@@ -42,7 +42,7 @@ jobs:
     # identical commit again; the publish job still checks the artifact's
     # recorded tag, repository and commit against its checkout.
     needs: validate
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
@@ -57,7 +57,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.14'
       - id: previous
         env:
           GH_TOKEN: ${{ github.token }}
@@ -77,7 +77,7 @@ jobs:
       !cancelled() && needs.validate.result == 'success' && needs.previous.result == 'success'
       && (needs.checks.result == 'success' || (needs.checks.result == 'skipped' && needs.previous.outputs.run_id != ''))
       && vars.RELEASE_PUBLISH_ENABLED == 'true' && (github.event_name == 'push' || inputs.publish)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: release
     permissions:
@@ -93,7 +93,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.14'
 
       - uses: actions/download-artifact@v8
         with:
