@@ -25,6 +25,9 @@ const (
 
 	installClaimAfter = 30 * 24 * 60 * 60 * 1000 // §8.2 item 4, "or after 30 days of attempts"
 
+	// §8.2 item 3 (C3b): the longest a real-clock pump sleeps before re-reading the wall clock.
+	maxRealWaitMS = 60_000
+
 	// Bound best-effort termination flushes so a blocked request cannot prevent exit (C1).
 	terminationBudget = 600 * time.Millisecond
 
@@ -649,6 +652,15 @@ func (s *SDK) pump(quit, done chan struct{}) {
 			}
 			continue
 		}
+		// RFC-0001 §8.2 item 3 wants the day boundary on a clock that keeps
+		// running through system sleep, and a Go timer counts the monotonic
+		// clock, which does not. Capping the wait bounds how late a sleep can
+		// make the C3b check: a woken host re-reads the wall clock within a
+		// minute. Waking early is harmless; step finds nothing due and returns
+		// the same deadline.
+		if wait > maxRealWaitMS {
+			wait = maxRealWaitMS
+		}
 		timer := time.NewTimer(time.Duration(wait) * time.Millisecond)
 		select {
 		case <-quit:
@@ -721,6 +733,23 @@ func (s *SDK) step(now *big.Int) (*big.Int, bool) {
 		return nil, true
 	}
 
+	// §8.2 item 3, C3b: the day check belongs to the running SDK, not to Init
+	// alone, or a process that outlives a UTC midnight is active only on the
+	// day it launched. Gated on bootstrap so it can never race bootstrap's own
+	// check into a second heartbeat for the same day, and run under
+	// observationMu, like the install above, so a concurrent disable's wipe
+	// cannot be followed by a heartbeat that recreates the queue. An empty day
+	// (after Reset) differs from today, so a rotated identity heartbeats too.
+	if day := new(big.Int).Div(now, millisPerDay).String(); s.bootstrapped() && state.LastHeartbeatDay != day {
+		s.store.Update(func(state *State) { state.LastHeartbeatDay = day })
+		s.enqueue(QueuedEvent{ID: newUUIDv7(now), N: "heartbeat", T: literal(now), Heartbeat: true})
+		s.mu.Lock()
+		s.pending = true
+		s.mu.Unlock()
+		s.observationMu.Unlock()
+		return nil, true
+	}
+
 	s.observationMu.Unlock()
 
 	// §8.6 / wire §8: the kill switch. Nothing is sent while it is on; the
@@ -778,6 +807,9 @@ func (s *SDK) deadline(now *big.Int, extra *big.Int) *big.Int {
 	installEnqueued := s.installEnqueuedThisRun
 	s.mu.Unlock()
 	candidates = append(candidates, parseBig(state.BackoffNextAt), parseBig(state.StopUntilMS))
+	// C3b: the next UTC midnight, so an idle pump wakes for the day check.
+	nextDay := new(big.Int).Div(now, millisPerDay)
+	candidates = append(candidates, nextDay.Add(nextDay, big.NewInt(1)).Mul(nextDay, millisPerDay))
 	if !state.InstallClaimed && !installEnqueued {
 		candidates = append(candidates, parseBig(state.InstallDueAt))
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/big"
 	"testing"
 )
 
@@ -53,8 +54,12 @@ func TestDeadlineExcludesPastAndAlreadyScheduledInstall(t *testing.T) {
 		state.InstallDueAt = formatBig(after(now, -10000))
 		state.BackoffNextAt = formatBig(after(now, -1000))
 	})
-	if got := h.sdk.deadline(now, nil); got != nil {
-		t.Fatalf("claimed idle install has deadline %s", got)
+	// With every past instant excluded, the one deadline an idle pump still has
+	// is the next UTC midnight, for C3b's day check.
+	nextMidnight := new(big.Int).Div(now, millisPerDay)
+	nextMidnight.Add(nextMidnight, big.NewInt(1)).Mul(nextMidnight, millisPerDay)
+	if got := h.sdk.deadline(now, nil); got == nil || got.Cmp(nextMidnight) != 0 {
+		t.Fatalf("claimed idle install has deadline %v, want only the next UTC midnight %s", got, nextMidnight)
 	}
 	h.store.Update(func(state *State) {
 		state.InstallClaimed = false
