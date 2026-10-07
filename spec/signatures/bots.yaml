@@ -71,6 +71,15 @@ signatures:
   # through and the human filter counts them as visitors until a needle names them (F27).
   - { needle: google favicon,         operator: Google,            category: indexing }
   - { needle: google web preview,     operator: Google,            category: indexing }
+  # Google Ads' landing-page checker renders the page in a real Chrome and its UA carries NO
+  # platform token and no bot word: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko;
+  # Mozilla/5.0, Google-AdWords-Express) Chrome/153.0.8010.52 Safari/537.36". Seen on
+  # eqbase.app 2026-09-18..10-06 in bursts of 20-60 pageviews on the days an ad was created or
+  # edited (211 pageviews, 55 daily hashes, every one counted as a human Chrome visitor with
+  # os = (not set)); the request counts per day matched Cloudflare's edge log exactly. One
+  # needle also covers Google-Adwords-Instant, which the generic `bot` token only caught through
+  # its adsbot.html URL.
+  - { needle: google-adwords,         operator: Google,            category: indexing }
   # GoogleOther spans product/R&D crawling; the request does not establish its purpose.
   - { needle: googleother,            operator: Google,            category: other }
   # Extended tokens are robots.txt reuse controls, not separate HTTP crawlers. Retain only
