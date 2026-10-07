@@ -1,0 +1,23 @@
+c: C3b
+title: a running SDK sends the new UTC day's heartbeat without another init
+implements: spec/sdk-conformance.md §4 C3b
+notes: |
+  C3 turns the day between two processes; this row turns it under one. The
+  pin starts on an exact UTC midnight (day 20696), so the first 3 000 ms
+  advance delivers the bootstrap heartbeat and the immediate install in one
+  request, and the day-long advance lands at 1788220803000, three seconds
+  into day 20697, which is the instant the rollover heartbeat must carry:
+  the check runs when the clock moves, not at the boundary it crossed. No
+  second `init` is issued, so a heartbeat on day two can only come from the
+  running SDK. The real-clock half of the rule (a boundary wake that keeps
+  running through system sleep) is not observable here and is a review item.
+arms:
+  - name: one process across a UTC midnight
+    env: {JELTO_NOW: "1788134400000"}
+    steps:
+      - run: [init prd_conform001, sleep 3000, sleep 86400000, sleep 3000]
+    assert:
+      - {check: event_names, counts: {heartbeat: 2}, why: "one per UTC day, the second without a new init"}
+      - {check: request_count, equal: 2, why: "the first day's batch, then the rollover heartbeat; the last sleep sends nothing"}
+      - {check: t_literal, request: 1, event: 0, value: "1788220803000", why: "dated the new day, at the instant the running SDK saw it"}
+      - {check: state, path: last_heartbeat_day, value: '"20697"', why: "the day the rollover heartbeat was enqueued for (a decimal string, §3.2)"}
