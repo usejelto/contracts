@@ -1,6 +1,6 @@
 {
   "name": "jelto-contracts",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "files": {
     "go.mod": "go.mod",
     "go.sum": "go.sum",
