@@ -1,6 +1,6 @@
 # spec/wire-v1 — ingest wire format
 
-Status: v1 draft, rev 0.25 (frozen at end of M1) · Gates: M1 · Normative for: server validation,
+Status: v1 draft, rev 0.26 (frozen at end of M1) · Gates: M1 · Normative for: server validation,
 `spec/wire-v1.schema.json`, every SDK, the snippet, `spec/sdk-conformance.md`.
 
 Key words MUST, SHOULD, MAY are RFC 2119. This document is the contract; RFC-0001 §2 is the
@@ -438,6 +438,14 @@ request after `until` **one `heartbeat`, alone in its batch**, before anything t
 holding, and MUST NOT drain the queue until that request has been answered. There is no other
 remote instruction.
 
+`until` is bounded on the client (rev 0.26). A client MUST NOT park for more than **30 days
+(2 592 000 s) past the moment it received the response**: an `until` further out is honoured as
+exactly 30 days from receipt, persisted as that, and the probe this section already requires then
+re-reads a switch that is still on. Nothing is lost by the bound — a longer switch is re-armed by
+the probe's own `202` — and it is what keeps one forged, stale or mistaken answer from silencing
+an install for years. §9 clamps the other remote channel, `Retry-After`, to 3 600 s for the same
+reason.
+
 The re-check was a `MAY` through rev 0.16 and nothing else in the contract treated it as optional.
 `spec/sdk-conformance.md` C16 **asserts** it — "at ~60 s one `heartbeat`, then the queue drains" —
 and RFC-0001 §8.6 item 16 states it flat: "The SDK re-checks by sending one heartbeat after
@@ -532,6 +540,16 @@ has no product to attribute and is left to process metrics.
   on preference for a shorter or longer window to add a field.
 
 ## Amendments to RFC-0001
+
+- rev 0.26: **the client bounds `stop.until` to 30 days from receipt** (§8) — *every app SDK; no
+  server, schema or snippet change, and the freeze is not in play.* Through rev 0.25 a `stop`
+  could carry any `until` and a client persisted it as given, so one answer from a compromised
+  endpoint, an interposing proxy or a stale mock parked an install until that app's own code
+  called `disable()`; Electron and Swift `reset()` did not clear it either. §9 already clamps
+  `Retry-After` to 3 600 s so that an intermediary cannot become a second kill switch; §8 now
+  bounds the first one the same way. A longer switch loses nothing: the single-`heartbeat` probe
+  the section already requires re-reads it at the bound. `spec/sdk-conformance.md` C16 uses
+  `stop:60` and is unchanged.
 
 - rev 0.25: documentation correction only. §§3–4 now agree with §7: custom
   and heartbeat property keys are discovered on receipt; other built-ins keep
