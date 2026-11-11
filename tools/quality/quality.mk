@@ -16,6 +16,12 @@
 #                            only findings outside it fail
 #   SAST_EXCLUDE             extra paths opengrep skips (vendored or generated
 #                            code that another repository scans)
+#   GOLANGCI_ENV             environment for golangci-lint, for a module whose
+#                            requirements resolve through a generated file
+#   GOLANGCI_BASELINE        a reviewed list of the findings that predate the
+#                            linter; only a difference from it fails
+#   KNIP_BASELINE            the same for Knip, a development dependency the
+#                            repository declares
 
 QUALITY_DIR := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
 QUALITY_PYTHON ?= python3
@@ -23,8 +29,11 @@ QUALITY_TOOL = $(QUALITY_PYTHON) $(QUALITY_DIR)/install_tools.py
 QUALITY_COMMUNITY_RULES ?=
 GITLEAKS_BASELINE ?=
 SAST_EXCLUDE ?=
+GOLANGCI_ENV ?=
+GOLANGCI_BASELINE ?=
+KNIP_BASELINE ?=
 
-.PHONY: hooks tools secrets osv workflow-audit sast
+.PHONY: hooks tools secrets osv workflow-audit sast golangci lint-baseline knip knip-baseline
 
 hooks: ## Run the commit-message and staged-secret checks before every commit
 	git config core.hooksPath .githooks
@@ -78,3 +87,44 @@ sast: ## Run the pinned community rules for this repository's languages and its 
 		--exclude 'vendor' --exclude 'node_modules' --exclude '.opengrep' "$$@" .
 	@if [ -d .opengrep ]; then $(QUALITY_TOOL) run opengrep test .opengrep; fi
 
+# golangci-lint with the repository's own .golangci.yml, which names every
+# linter, setting and exclusion with its reason. With a baseline the report is
+# compared by lint_baseline.py: a finding outside the baseline fails, and so
+# does a listed finding that no longer occurs, so a fix shrinks the file.
+golangci: ## Lint and format-check the Go code with golangci-lint
+	@if [ -z "$(GOLANGCI_BASELINE)" ]; then \
+		$(GOLANGCI_ENV) $(QUALITY_TOOL) run golangci-lint run ./...; \
+	else \
+		out=$$(mktemp); status=0; \
+		$(GOLANGCI_ENV) $(QUALITY_TOOL) run golangci-lint run --output.json.path "$$out" --output.text.path /dev/null ./... || status=$$?; \
+		if [ $$status -gt 1 ]; then rm -f "$$out"; echo "golangci: golangci-lint exited with $$status" >&2; exit $$status; fi; \
+		status=0; $(QUALITY_PYTHON) $(QUALITY_DIR)/lint_baseline.py check "$$out" "$(GOLANGCI_BASELINE)" || status=$$?; \
+		rm -f "$$out"; exit $$status; \
+	fi
+
+lint-baseline: ## Rewrite GOLANGCI_BASELINE from the current findings, for review
+	@test -n "$(GOLANGCI_BASELINE)" || { echo 'lint-baseline: GOLANGCI_BASELINE is not set' >&2; exit 1; }
+	@out=$$(mktemp); status=0; \
+	$(GOLANGCI_ENV) $(QUALITY_TOOL) run golangci-lint run --output.json.path "$$out" --output.text.path /dev/null ./... || status=$$?; \
+	if [ $$status -gt 1 ]; then rm -f "$$out"; exit $$status; fi; \
+	$(QUALITY_PYTHON) $(QUALITY_DIR)/lint_baseline.py write "$$out" "$(GOLANGCI_BASELINE)"; rm -f "$$out"
+
+# Knip with the repository's knip.config.ts: files nothing imports, unused
+# exports and dependencies, and dependencies used but not declared. With a
+# baseline the report is compared exactly as golangci-lint's is.
+knip: ## Find unused files, exports and dependencies with Knip
+	@if [ -z "$(KNIP_BASELINE)" ]; then \
+		npx --no-install knip; \
+	else \
+		out=$$(mktemp); status=0; \
+		npx --no-install knip --reporter json > "$$out" || status=$$?; \
+		if [ $$status -gt 1 ]; then rm -f "$$out"; echo "knip: knip exited with $$status" >&2; exit $$status; fi; \
+		status=0; $(QUALITY_PYTHON) $(QUALITY_DIR)/lint_baseline.py check "$$out" "$(KNIP_BASELINE)" || status=$$?; \
+		rm -f "$$out"; exit $$status; \
+	fi
+
+knip-baseline: ## Rewrite KNIP_BASELINE from the current findings, for review
+	@test -n "$(KNIP_BASELINE)" || { echo 'knip-baseline: KNIP_BASELINE is not set' >&2; exit 1; }
+	@out=$$(mktemp); status=0; npx --no-install knip --reporter json > "$$out" || status=$$?; \
+	if [ $$status -gt 1 ]; then rm -f "$$out"; exit $$status; fi; \
+	$(QUALITY_PYTHON) $(QUALITY_DIR)/lint_baseline.py write "$$out" "$(KNIP_BASELINE)"; rm -f "$$out"

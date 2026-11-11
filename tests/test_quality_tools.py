@@ -15,6 +15,9 @@ QUALITY = ROOT / 'tools' / 'quality'
 spec = importlib.util.spec_from_file_location('install_tools', QUALITY / 'install_tools.py')
 install_tools = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(install_tools)
+spec = importlib.util.spec_from_file_location('lint_baseline', QUALITY / 'lint_baseline.py')
+lint_baseline = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(lint_baseline)
 
 
 def tarball(name, data):
@@ -135,6 +138,63 @@ class CommitMessageHookTest(unittest.TestCase):
         self.assertEqual(self.verdict('# Please enter the commit message\n\nfix(x): y\n'), 0)
         for subject in ["Merge branch 'main'", 'Revert "fix(x): y"', 'fixup! fix(x): y']:
             self.assertEqual(self.verdict(subject + '\n'), 0, subject)
+
+
+class LintBaselineTest(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.cwd = mock.patch('pathlib.Path.cwd', return_value=self.root)
+        self.cwd.start()
+        self.addCleanup(self.cwd.stop)
+
+    def report(self, *issues):
+        path = self.root / 'report.json'
+        path.write_text(json.dumps({'Issues': [
+            {'FromLinter': linter, 'Text': text, 'Pos': {'Filename': name, 'Line': line}}
+            for name, line, linter, text in issues]}))
+        return path
+
+    def run_check(self, report, baseline):
+        with mock.patch('sys.stderr'), mock.patch('sys.stdout'):
+            return lint_baseline.main(['check', str(report), str(baseline)])
+
+    def test_a_finding_outside_the_baseline_fails(self):
+        baseline = self.root / 'baseline.json'
+        lint_baseline.write(lint_baseline.findings(self.report(('a.go', 3, 'errcheck', 'x')))[0], baseline)
+        self.assertEqual(self.run_check(self.report(('a.go', 3, 'errcheck', 'x'), ('b.go', 1, 'unused', 'y')), baseline), 1)
+
+    def test_known_findings_pass_even_when_their_lines_move(self):
+        baseline = self.root / 'baseline.json'
+        with mock.patch('sys.stdout'):
+            lint_baseline.write(lint_baseline.findings(self.report(('a.go', 3, 'errcheck', 'x')))[0], baseline)
+        self.assertEqual(self.run_check(self.report(('a.go', 40, 'errcheck', 'x')), baseline), 0)
+
+    def test_a_fixed_finding_still_listed_fails_until_the_baseline_shrinks(self):
+        baseline = self.root / 'baseline.json'
+        with mock.patch('sys.stdout'):
+            lint_baseline.write(lint_baseline.findings(self.report(('a.go', 3, 'errcheck', 'x')))[0], baseline)
+        self.assertEqual(self.run_check(self.report(), baseline), 1)
+
+    def test_a_second_occurrence_of_a_known_finding_is_new(self):
+        baseline = self.root / 'baseline.json'
+        with mock.patch('sys.stdout'):
+            lint_baseline.write(lint_baseline.findings(self.report(('a.go', 3, 'errcheck', 'x')))[0], baseline)
+        self.assertEqual(self.run_check(self.report(('a.go', 3, 'errcheck', 'x'), ('a.go', 9, 'errcheck', 'x')), baseline), 1)
+
+
+class KnipBaselineTest(unittest.TestCase):
+    def test_reads_knip_reports(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / 'knip.json'
+            report.write_text(json.dumps({'issues': [{
+                'file': 'src/a.ts', 'exports': [{'name': 'unused', 'line': 4}], 'files': [],
+                'duplicates': [[{'name': 'a', 'line': 1}, {'name': 'b', 'line': 2}]]}]}))
+            with mock.patch('pathlib.Path.cwd', return_value=Path(directory)):
+                found, _ = lint_baseline.findings(report)
+        self.assertEqual(set(found), {('src/a.ts', 'knip:exports', 'unused'),
+                                      ('src/a.ts', 'knip:duplicates', 'a|b')})
 
 
 if __name__ == '__main__':
