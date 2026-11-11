@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"io"
 	"math/big"
-	"math/rand"
+	"math/rand" // nosemgrep: math-random-used -- retry jitter only; nothing secret or unguessable is drawn from it
 	"net/http"
 	"strconv"
 	"strings"

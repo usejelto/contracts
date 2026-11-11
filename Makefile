@@ -29,7 +29,12 @@ ruff:
 	$(QUALITY_TOOL) run ruff check --no-cache .
 	$(QUALITY_TOOL) run ruff format --no-cache --check .
 
-security: secrets workflow-audit osv govulncheck
+security: secrets workflow-audit osv govulncheck sast
+
+# The community rules for Go and Python (the conformance tools, the release
+# and packaging tooling and the shared quality tools).
+QUALITY_COMMUNITY_RULES := go/lang/security go/lang/correctness \
+	python/lang/security python/lang/correctness generic/unicode/security
 
 govulncheck:
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...

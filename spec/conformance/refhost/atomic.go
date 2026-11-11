@@ -6,7 +6,7 @@ import (
 )
 
 func atomicWrite(path string, data []byte, durable bool) bool {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil { // nosemgrep: incorrect-default-permission -- 0700: owner-only state directory
 		return false
 	}
 	temporary := path + ".tmp"

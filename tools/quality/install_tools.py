@@ -93,6 +93,7 @@ def download(url):
     for attempt in range(ATTEMPTS):
         try:
             request = urllib.request.Request(url, headers={'User-Agent': 'jelto-install-tools'})
+            # nosemgrep: dynamic-urllib-use-detected -- an HTTPS URL pinned in tools.json, checked by load_manifest
             with urllib.request.urlopen(request, timeout=120) as response:
                 data = response.read(MAX_DOWNLOAD + 1)
             if len(data) > MAX_DOWNLOAD:
@@ -176,8 +177,11 @@ def install(name, tools):
             commit = tool['version']
             git = ['git', '-C', str(staging), '-c', 'advice.detachedHead=false']
             subprocess.run(['git', 'init', '--quiet', str(staging)], check=True)
+            # nosemgrep: dangerous-subprocess-use-audit -- git with an argument list and the commit tools.json pins, never a shell
             subprocess.run([*git, 'fetch', '--quiet', '--depth', '1', tool['git'], commit], check=True)
+            # nosemgrep: dangerous-subprocess-use-audit -- git with an argument list and the commit tools.json pins, never a shell
             subprocess.run([*git, 'checkout', '--quiet', 'FETCH_HEAD'], check=True)
+            # nosemgrep: dangerous-subprocess-use-audit -- git with an argument list and the commit tools.json pins, never a shell
             head = subprocess.run(
                 [*git, 'rev-parse', 'HEAD'], check=True, capture_output=True, text=True
             ).stdout.strip()
@@ -212,6 +216,7 @@ def main(argv):
             path = install(rest[0], tools)
             if 'git' in tools[rest[0]]:
                 raise ToolError(f'{rest[0]} is a directory of data, not a program')
+            # nosemgrep: dangerous-os-exec-audit -- execs the pinned binary it just verified by SHA-256
             os.execv(str(path), [str(path), *rest[1:]])
     except ToolError as error:
         print(f'install_tools: {error}', file=sys.stderr)

@@ -19,6 +19,8 @@ import tomllib
 import urllib.error
 import urllib.parse
 import urllib.request
+
+# nosemgrep: use-defused-xml -- ElementTree reads only the dotnet repository's own Jelto.csproj from the checked-out tag
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path, PurePosixPath
@@ -27,6 +29,7 @@ SEMVER = re.compile(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+
 
 
 def run(*args, cwd=None, env=None):
+    # nosemgrep: dangerous-subprocess-use-audit -- an argument list of release tools, never a shell
     return subprocess.check_output(
         [shutil.which(args[0]) or args[0], *map(str, args[1:])], cwd=cwd, env=env, text=True
     ).strip()
@@ -67,6 +70,7 @@ def identity(root):
             if crate['name'] != 'tauri-plugin-jelto' or crate['version'] != value or locked['version'] != value:
                 raise ValueError('Tauri npm/Rust/lockfile version mismatch')
     elif component == 'dotnet':
+        # nosemgrep: use-defused-xml-parse -- the dotnet repository's own Jelto.csproj from the checked-out tag, not external input
         project = ET.parse(root / 'Jelto/Jelto.csproj')
         if project.findtext('.//PackageId') != 'Jelto':
             raise ValueError('Unexpected NuGet package identity')
@@ -110,6 +114,7 @@ def validate(root, tag, repo, ancestry=True):
             raise ValueError('Missing declared MIT license text')
     if component == 'tauri' and tomllib.loads((root / 'Cargo.toml').read_text())['package'].get('repository') != url:
         raise ValueError('Cargo repository metadata mismatch')
+    # nosemgrep: use-defused-xml-parse -- the dotnet repository's own Jelto.csproj from the checked-out tag, not external input
     if component == 'dotnet' and ET.parse(root / 'Jelto/Jelto.csproj').findtext('.//RepositoryUrl') != url:
         raise ValueError('NuGet repository metadata mismatch')
     if ancestry:
@@ -502,6 +507,7 @@ def registry_status(root, tag, repo, wait=False, kind=None):
 
 def invoke(*args):
     """Run a command and return its completed process; unlike run(), a failure is reported, not raised."""
+    # nosemgrep: dangerous-subprocess-use-audit -- an argument list of release tools, never a shell
     return subprocess.run(
         [shutil.which(args[0]) or args[0], *map(str, args[1:])], capture_output=True, text=True, check=False
     )
@@ -704,6 +710,7 @@ def doctor(root, repo):
     findings = []
 
     def gh_ok(*args):
+        # nosemgrep: dangerous-subprocess-use-audit -- an argument list of release tools, never a shell
         return subprocess.run([shutil.which('gh') or 'gh', *args], capture_output=True, text=True, check=False)
 
     variable = gh_ok('variable', 'get', 'RELEASE_PUBLISH_ENABLED', '--repo', repo)

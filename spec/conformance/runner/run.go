@@ -69,7 +69,7 @@ func (r *Runner) Run(scenario Scenario) ScenarioOutcome {
 	for i, arm := range scenario.Arms {
 		if !arm.KeepState || stateDir == "" {
 			stateDir = filepath.Join(r.workDir, fmt.Sprintf("%s-arm%d", scenario.C, i))
-			if err := os.MkdirAll(stateDir, 0o700); err != nil {
+			if err := os.MkdirAll(stateDir, 0o700); err != nil { // nosemgrep: incorrect-default-permission -- 0700: owner-only per-scenario state directory
 				outcome.Arms = append(outcome.Arms, ArmOutcome{Arm: arm, Error: err})
 				continue
 			}

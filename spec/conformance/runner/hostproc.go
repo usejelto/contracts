@@ -49,7 +49,7 @@ type Host struct {
 // StartHost launches the host with the environment of §3 plus whatever the arm
 // adds.
 func StartHost(binary string, env map[string]string) (*Host, error) {
-	cmd := exec.Command(binary)
+	cmd := exec.Command(binary) // nosemgrep: dangerous-exec-command -- runs the SDK host the operator names with -host, without a shell
 	// Remove ambient JELTO_ variables so developer settings cannot change scenario behavior.
 	cmd.Env = append(withoutJelto(os.Environ()), flattenEnv(env)...)
 	stdin, err := cmd.StdinPipe()

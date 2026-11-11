@@ -210,7 +210,7 @@ func build(moduleRoot, work, name, pkg string) (string, error) {
 // is what stops a scenario racing the bind (mockd main.go, `Ready`).
 func startMockd(binary, work string) (*exec.Cmd, string, error) {
 	control := filepath.Join(work, "mockd.sock")
-	cmd := exec.Command(binary,
+	cmd := exec.Command(binary, // nosemgrep: dangerous-exec-command -- runs the mockd binary the runner just built, without a shell
 		"-addr", "127.0.0.1:0",
 		"-control", control,
 		"-record", filepath.Join(work, "mockd-record.jsonl"),

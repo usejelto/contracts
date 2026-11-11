@@ -91,7 +91,7 @@ func (s *Store) Update(mutate func(*State)) State {
 }
 
 func (s *Store) persistLocked() {
-	if err := os.MkdirAll(s.dir, 0o700); err != nil {
+	if err := os.MkdirAll(s.dir, 0o700); err != nil { // nosemgrep: incorrect-default-permission -- 0700: owner-only state directory
 		return
 	}
 	raw, err := json.Marshal(s.state)

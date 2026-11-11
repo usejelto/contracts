@@ -431,7 +431,7 @@ func write(w http.ResponseWriter, status int, body string, delay time.Duration) 
 	}
 	w.WriteHeader(status)
 	if body != "" {
-		_, _ = io.WriteString(w, body)
+		_, _ = io.WriteString(w, body) // nosemgrep: no-io-writestring-to-responsewriter -- the mock writes the JSON or text body a scenario scripted, never HTML
 	}
 	return &Response{
 		Status:  status,
