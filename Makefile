@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := test
-.PHONY: build test test-package conformance conformance-twice package signatures security
+.PHONY: build test test-package conformance conformance-twice package signatures check security govulncheck
 GO ?= go
 PYTHON ?= python3
 EXE := $(if $(filter Windows_NT,$(OS)),.exe,)
@@ -9,7 +9,15 @@ VERSION := $(shell $(PYTHON) -c 'import json; print(json.load(open("spec/contrac
 # maintained here and vendored into every other Jelto repository.
 include tools/quality/quality.mk
 
-security: secrets workflow-audit osv
+# The whole gate: what to run before a pull request, and what CI runs on Linux.
+# The Windows row repeats the platform-sensitive part (test build package and
+# conformance); the scanners are platform-independent.
+check: test build package security conformance-twice
+
+security: secrets workflow-audit osv govulncheck
+
+govulncheck:
+	$(GO) run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
 build:
 	mkdir -p bin

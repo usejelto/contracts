@@ -22,13 +22,12 @@ from this component's root. The standalone checkout contains its build inputs;
 you do not need the private Jelto backend.
 
 ```sh
-make test
-make build
-make conformance-twice
-make package
+make hooks   # once per clone
+make check   # the whole gate; CI runs the same command
 ```
 
-Run the smallest relevant checks while iterating, then the affected gates above.
+`make check` runs `test`, `build`, `package`, `security` and `conformance-twice`.
+Run the smallest relevant target while iterating, then `make check`.
 Documentation-only changes need link and example review; SDK behavior or wire
 changes require the appropriate tests and two consecutive conformance passes
 before certification. Package changes must also pass packaging checks.
@@ -40,6 +39,38 @@ than copying observed output. Coordinate version and checksum changes with
 consumers. Published archives are immutable; `make signatures` is an explicit
 catalog refresh and is not part of ordinary tests. Backend metrics, billing,
 database changes and backend-only fixtures belong to the service repository.
+
+## Checks and exceptions
+
+The security targets run separate programs, not project dependencies.
+`tools/quality/tools.json` pins each one's exact version and SHA-256; the first
+run downloads and verifies it into `~/.cache/jelto-tools` (`JELTO_TOOLS_DIR`
+overrides the location) and `make tools` installs them all ahead of time. The
+targets themselves live in `tools/quality/quality.mk`, which every other Jelto
+repository consumes as a checksummed snapshot, so change them here.
+
+| Target | Tool | What it checks |
+|---|---|---|
+| `make secrets` | gitleaks | the whole Git history for credentials |
+| `make workflow-audit` | actionlint, zizmor | workflow syntax, script injection, permissions and pinning |
+| `make osv` | OSV-Scanner | `go.sum` against the OSV database, downloaded and matched locally |
+| `make govulncheck` | govulncheck | Go code paths that reach a known vulnerability |
+
+`make hooks` enables two Git hooks: `commit-msg` rejects a subject that is not a
+Conventional Commit, and `pre-commit` runs gitleaks over the staged changes. Do
+not bypass them with `--no-verify`.
+
+When a check reports something, fix a real problem in the same change. A
+deliberate exception, or a finding the tool got wrong, is marked at the one
+place it applies, with the reason beside it:
+
+- gitleaks: a `.gitleaks.toml` allowlist entry naming the one literal and why;
+- zizmor: `# zizmor: ignore[<audit>]` on the line, with the reason above it;
+- OSV-Scanner: an `[[IgnoredVulns]]` entry in `osv-scanner.toml` with a
+  `reason` and an `ignoreUntil` date.
+
+Never disable a rule, a file or a directory wholesale, and never relax a
+threshold to make a check pass.
 
 ## Review and acceptance
 

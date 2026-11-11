@@ -43,17 +43,25 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+          # make check scans the whole Git history for secrets.
+          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: Component tests and packages
-        run: make test build package
-      - name: Go dependency vulnerability check
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+      # The same command a contributor runs: tests, packages, the security
+      # scans and conformance twice. The scanners do not depend on the
+      # platform, so the other rows repeat only the platform-sensitive part.
+      - name: Checks
+        if: runner.os == 'Linux'
+        run: make check
+      - name: Component tests, packages and Go vulnerability check
+        if: runner.os != 'Linux'
+        run: make test build package govulncheck
       - name: Conformance twice
+        if: runner.os != 'Linux'
         run: make conformance-twice
 
       - name: Prepare release artifacts
