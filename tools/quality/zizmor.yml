@@ -1,0 +1,11 @@
+# zizmor configuration shared by every Jelto repository.
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        # Third-party actions are pinned to release tags, not commit hashes, by
+        # project policy, and Dependabot proposes each new version. ref-pin
+        # therefore accepts any explicit ref and fails only a missing one. It
+        # cannot tell a tag from a branch offline; that a ref resolves as a tag
+        # is checked when the reference is committed, not here.
+        "*": ref-pin

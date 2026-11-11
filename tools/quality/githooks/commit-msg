@@ -1,0 +1,43 @@
+#!/bin/sh
+# Rejects a commit whose subject line is not a Conventional Commit:
+#
+#   type(scope)!: summary        the scope and the ! are optional
+#
+# The types are the ones this project's history already uses. `feat` and
+# `feature` are both accepted because both appear throughout the history;
+# `spec` marks a specification change and `ops` an operational one. Merge,
+# revert and autosquash subjects are written by Git itself and pass as they are.
+#
+# Usage: commit-msg <message-file>   (Git passes the file when it runs the hook)
+set -eu
+
+file=${1:?usage: commit-msg <message-file>}
+comment=$(git config --get core.commentChar 2>/dev/null || true)
+comment=${comment:-#}
+
+# The subject is the first line that is neither a comment nor blank, which is
+# also the line Git keeps after its default message cleanup.
+subject=$(grep -v -e "^$comment" -e '^[[:space:]]*$' "$file" | head -n 1 || true)
+
+case $subject in
+  'Merge '* | 'Revert "'* | 'fixup! '* | 'squash! '* | 'amend! '*) exit 0 ;;
+esac
+
+types='feat|feature|fix|perf|refactor|spec|docs|test|chore|ci|build|style|revert|ops'
+scope='[a-z0-9][a-z0-9._/-]*'
+if printf '%s\n' "$subject" | grep -Eq "^($types)(\(($scope)(, ?$scope)*\))?!?: [^[:space:]]"; then
+  exit 0
+fi
+
+cat >&2 <<MESSAGE
+commit-msg: the subject is not a Conventional Commit:
+
+  $subject
+
+Write it as  type(scope): summary  -- for example
+  fix(query): keep a failed read out of the zero bucket
+  chore(deps): bump vite to 7.3.8
+The scope is optional. Allowed types: $(printf '%s' "$types" | tr '|' ' ').
+The message was kept in $file; edit it and commit again.
+MESSAGE
+exit 1

@@ -1,0 +1,181 @@
+{
+  "_comment": [
+    "Exact versions of the separately installed programs the shared quality targets run.",
+    "install_tools.py downloads each one from its upstream release, refuses it unless the",
+    "archive SHA-256 matches the value here, and keeps it in a per-user cache. Nothing here",
+    "is a project dependency. A version moves only by editing this file deliberately.",
+    "Asset digests are the ones the upstream GitHub release publishes for that asset.",
+    "deadcode and govulncheck install with go install, which the Go checksum database verifies.",
+    "opengrep-rules is the LGPL community rule set; a Git commit id pins its content."
+  ],
+  "tools": {
+    "actionlint": {
+      "version": "1.7.12",
+      "binary": "actionlint",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_darwin_arm64.tar.gz",
+          "sha256": "aba9ced2dee8d27fecca3dc7feb1a7f9a52caefa1eb46f3271ea66b6e0e6953f"
+        },
+        "darwin-x86_64": {
+          "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_darwin_amd64.tar.gz",
+          "sha256": "5b44c3bc2255115c9b69e30efc0fecdf498fdb63c5d58e17084fd5f16324c644"
+        },
+        "linux-arm64": {
+          "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_arm64.tar.gz",
+          "sha256": "325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6"
+        },
+        "linux-x86_64": {
+          "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz",
+          "sha256": "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+        }
+      }
+    },
+    "deadcode": {
+      "version": "v0.52.0",
+      "binary": "deadcode",
+      "go": "golang.org/x/tools/cmd/deadcode"
+    },
+    "gitleaks": {
+      "version": "8.30.1",
+      "binary": "gitleaks",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_darwin_arm64.tar.gz",
+          "sha256": "b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5"
+        },
+        "darwin-x86_64": {
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_darwin_x64.tar.gz",
+          "sha256": "dfe101a4db2255fc85120ac7f3d25e4342c3c20cf749f2c20a18081af1952709"
+        },
+        "linux-arm64": {
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_arm64.tar.gz",
+          "sha256": "e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080"
+        },
+        "linux-x86_64": {
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz",
+          "sha256": "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+        }
+      }
+    },
+    "golangci-lint": {
+      "version": "2.15.0",
+      "binary": "golangci-lint",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-darwin-arm64.tar.gz",
+          "sha256": "d1e409481a8ca846c4bc97e781eb5cb1bd5c23353a0b3977a1cbda1b1b6447d5"
+        },
+        "darwin-x86_64": {
+          "url": "https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-darwin-amd64.tar.gz",
+          "sha256": "767b899a28285e88ded2823d5dcc4bc5ef681173eb2d80f029a7b17ee4ece3b8"
+        },
+        "linux-arm64": {
+          "url": "https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-linux-arm64.tar.gz",
+          "sha256": "b4d8f17068b35ee6060cc2f69a16fb48740d706fbba81661c318649c114a6998"
+        },
+        "linux-x86_64": {
+          "url": "https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-linux-amd64.tar.gz",
+          "sha256": "9b7fe6a6bf6334b98decf8d86b11415ea7889afdabdd1959fdce23af2a9ebcea"
+        }
+      }
+    },
+    "govulncheck": {
+      "version": "v1.8.0",
+      "binary": "govulncheck",
+      "go": "golang.org/x/vuln/cmd/govulncheck"
+    },
+    "opengrep": {
+      "version": "1.33.1",
+      "binary": "opengrep",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/opengrep/opengrep/releases/download/v1.33.1/opengrep_osx_arm64",
+          "sha256": "a17c1881bb40e3214266a7a291cf4f2ae3bc56c1715628b5712d2ec816bc3e2d"
+        },
+        "darwin-x86_64": {
+          "url": "https://github.com/opengrep/opengrep/releases/download/v1.33.1/opengrep_osx_x86",
+          "sha256": "c3bd18e0d898d44e28419d95dad57c8928bb46ab32889a0ee1f72a87ad9627af"
+        },
+        "linux-arm64": {
+          "url": "https://github.com/opengrep/opengrep/releases/download/v1.33.1/opengrep_manylinux_aarch64",
+          "sha256": "d1433f63a90b8bc0b6ad4b498a13b372b856ce9a754a43484ba4920fe2d76dcf"
+        },
+        "linux-x86_64": {
+          "url": "https://github.com/opengrep/opengrep/releases/download/v1.33.1/opengrep_manylinux_x86",
+          "sha256": "46e8133cc490f9f50518061590ce2f6be5a08afaeda034471c0ceda4b3899808"
+        }
+      }
+    },
+    "opengrep-rules": {
+      "version": "f1d2b562b414783763fd02a6ed2736eaed622efa",
+      "git": "https://github.com/opengrep/opengrep-rules.git"
+    },
+    "osv-scanner": {
+      "version": "2.7.1",
+      "binary": "osv-scanner",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/google/osv-scanner/releases/download/v2.7.1/osv-scanner_darwin_arm64",
+          "sha256": "b22c02877a811c8f78956e8643efa554932b7378f590d13f8e97d4e9448a29f3"
+        },
+        "darwin-x86_64": {
+          "url": "https://github.com/google/osv-scanner/releases/download/v2.7.1/osv-scanner_darwin_amd64",
+          "sha256": "b8420d5485ba792626315f1bf9a5a2046e971d38eea75bf9090c38852dbc3b1b"
+        },
+        "linux-arm64": {
+          "url": "https://github.com/google/osv-scanner/releases/download/v2.7.1/osv-scanner_linux_arm64",
+          "sha256": "983d22fbad9724514e3fcc6acc83b5fa64c5ffa6b0d9f510028f22c1b223ff81"
+        },
+        "linux-x86_64": {
+          "url": "https://github.com/google/osv-scanner/releases/download/v2.7.1/osv-scanner_linux_amd64",
+          "sha256": "fb7dab19a8bd9bbe5c3189f09d4b7ee1820c9553a23bac202648a56efd2f6ee8"
+        }
+      }
+    },
+    "ruff": {
+      "version": "0.17.4",
+      "binary": "ruff",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/astral-sh/ruff/releases/download/0.17.4/ruff-aarch64-apple-darwin.tar.gz",
+          "sha256": "6ef8b3a7fd5294f5e8384ceb29784a6f5657da0853824312b1d2cef53aef17af"
+        },
+        "darwin-x86_64": {
+          "url": "https://github.com/astral-sh/ruff/releases/download/0.17.4/ruff-x86_64-apple-darwin.tar.gz",
+          "sha256": "0475a156ae8d73ba3386c90207804a72b3d7002ceb9dbca38dabc5d84aa95c9b"
+        },
+        "linux-arm64": {
+          "url": "https://github.com/astral-sh/ruff/releases/download/0.17.4/ruff-aarch64-unknown-linux-gnu.tar.gz",
+          "sha256": "b939676db4532f748dc38c41361a29260f18b3e24a787d46d9278e449c25c2cf"
+        },
+        "linux-x86_64": {
+          "url": "https://github.com/astral-sh/ruff/releases/download/0.17.4/ruff-x86_64-unknown-linux-gnu.tar.gz",
+          "sha256": "3ab2b34aeacdbc1ea5c529cdbda3e05792633d587228123fd09f3b5a0facb27a"
+        }
+      }
+    },
+    "zizmor": {
+      "version": "1.32.0",
+      "binary": "zizmor",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/zizmorcore/zizmor/releases/download/v1.32.0/zizmor-aarch64-apple-darwin.tar.gz",
+          "sha256": "6efed18c4539a663fd3c851a2be9533fd8456c4e646d9416206da059154a0d3c"
+        },
+        "darwin-x86_64": {
+          "url": "https://github.com/zizmorcore/zizmor/releases/download/v1.32.0/zizmor-x86_64-apple-darwin.tar.gz",
+          "sha256": "6983143c719ada6845a69cc4dd2bacc215f971662fecd8bbd2678388e5ce5969"
+        },
+        "linux-arm64": {
+          "url": "https://github.com/zizmorcore/zizmor/releases/download/v1.32.0/zizmor-aarch64-unknown-linux-gnu.tar.gz",
+          "sha256": "cb152b207f815116d7fa1c1ee4614f61578803351395052908095e79adfd9fd0"
+        },
+        "linux-x86_64": {
+          "url": "https://github.com/zizmorcore/zizmor/releases/download/v1.32.0/zizmor-x86_64-unknown-linux-gnu.tar.gz",
+          "sha256": "bb110cc765eca9cd7efb2e284a956be5974c60027b0970f16397d86208a9957b"
+        }
+      }
+    }
+  }
+}

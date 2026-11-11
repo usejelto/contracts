@@ -1,0 +1,14 @@
+#!/bin/sh
+# Refuses a commit whose staged changes contain a secret gitleaks recognises.
+#
+# Usage: pre-commit <quality-dir>
+#   <quality-dir> holds install_tools.py, which supplies the pinned gitleaks.
+# A repository's own .gitleaks.toml applies when it has one; every allowlist
+# entry there names one reviewed literal and why. Never bypass this hook with
+# --no-verify: remove the secret, or record a reviewed literal instead.
+set -eu
+
+quality=${1:?usage: pre-commit <quality-dir>}
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+exec python3 "$quality/install_tools.py" run gitleaks git --pre-commit --staged --redact --no-banner .
