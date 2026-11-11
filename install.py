@@ -3,11 +3,11 @@
 import argparse
 import hashlib
 import json
-from pathlib import Path, PurePosixPath
 import shutil
 import stat
 import tempfile
 import zipfile
+from pathlib import Path, PurePosixPath
 
 VERSION_FILE = Path(__file__).resolve().parent / 'spec/contracts/manifest.json'
 VERSION = json.loads(VERSION_FILE.read_text())['version'] if VERSION_FILE.exists() else '0.1.0'

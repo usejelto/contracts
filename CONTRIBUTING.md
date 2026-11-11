@@ -54,7 +54,7 @@ repository consumes as a checksummed snapshot, so change them here.
 
 | Target | Tool | What it checks |
 |---|---|---|
-| `make lint` | golangci-lint | `.golangci.yml`: the standard linters and gofmt, against `.golangci-baseline.json` |
+| `make lint` | golangci-lint, ruff | `.golangci.yml`: the standard linters and gofmt, against `.golangci-baseline.json`; `ruff.toml` for the Python tooling, lint and format |
 | `make secrets` | gitleaks | the whole Git history for credentials |
 | `make workflow-audit` | actionlint, zizmor | workflow syntax, script injection, permissions and pinning |
 | `make osv` | OSV-Scanner | `go.sum` against the OSV database, downloaded and matched locally |
@@ -73,6 +73,7 @@ place it applies, with the reason beside it:
 - OSV-Scanner: an `[[IgnoredVulns]]` entry in `osv-scanner.toml` with a
   `reason` and an `ignoreUntil` date.
 
+- ruff: `# noqa: <code> -- <reason>` on the line.
 - golangci-lint: `//nolint:<linter> // <reason>` on the line. The baseline
   holds findings that predate the linter; a fix removes its entry (`make
   lint-baseline`, then review the diff), and nothing is added to it to make a

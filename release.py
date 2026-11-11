@@ -2,11 +2,10 @@
 """Standalone release tools. SDKs consume a checksummed copy; no backend imports."""
 import argparse
 import hashlib
-import io
 import http.client
+import io
 import json
 import os
-from pathlib import Path, PurePosixPath
 import re
 import shlex
 import shutil
@@ -21,6 +20,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
+from pathlib import Path, PurePosixPath
 
 SEMVER = re.compile(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?', re.ASCII)
 
@@ -445,7 +445,7 @@ def registry_status(root, tag, repo, wait=False, kind=None):
 
 def invoke(*args):
     """Run a command and return its completed process; unlike run(), a failure is reported, not raised."""
-    return subprocess.run([shutil.which(args[0]) or args[0], *map(str, args[1:])], capture_output=True, text=True)
+    return subprocess.run([shutil.which(args[0]) or args[0], *map(str, args[1:])], capture_output=True, text=True, check=False)
 
 
 def gh_json(*args):
@@ -599,7 +599,7 @@ def doctor(root, repo):
     findings = []
 
     def gh_ok(*args):
-        return subprocess.run([shutil.which('gh') or 'gh', *args], capture_output=True, text=True)
+        return subprocess.run([shutil.which('gh') or 'gh', *args], capture_output=True, text=True, check=False)
 
     variable = gh_ok('variable', 'get', 'RELEASE_PUBLISH_ENABLED', '--repo', repo)
     findings.append(('ok' if variable.stdout.strip() == 'true' else 'fail',
@@ -646,7 +646,7 @@ def configure(root, repo, url=None, checksum=None, contracts_version='0.1.3'):
         (root / 'package.json').write_text(json.dumps(package, indent=2, ensure_ascii=False) + '\n')
     if settings['component'] == 'tauri':
         path = root / 'Cargo.toml'
-        content = re.sub(r'^repository = .*\n', '', path.read_text(), flags=re.M)
+        content = re.sub(r'^repository = .*\n', '', path.read_text(), flags=re.MULTILINE)
         path.write_text(content.replace('[package]\n', '[package]\nrepository = "' + address + '"\n', 1))
     if settings['component'] == 'dotnet':
         path = root / 'Jelto/Jelto.csproj'

@@ -1,0 +1,12 @@
+# ruff for the release, packaging and quality tooling and its tests. `make lint`
+# runs `ruff check` and `ruff format --check`; the version is the one
+# tools/quality/tools.json pins. The rule set is ruff's default.
+
+# The tooling supports Python 3.11 and later (CONTRIBUTING); CI runs 3.14.
+target-version = "py311"
+# Long lines are mostly command lines and messages that read better whole.
+line-length = 120
+
+[format]
+# Each file keeps the quote style it was written in.
+quote-style = "preserve"

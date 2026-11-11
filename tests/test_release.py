@@ -1,16 +1,15 @@
-import hashlib
 import io
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
 import tarfile
 import tempfile
 import unittest
-from unittest.mock import patch
 import urllib.error
 import zipfile
+from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import release
@@ -136,9 +135,9 @@ class ReleaseTests(unittest.TestCase):
             self.assertFalse(release.registry_matches(folder, item, '1.2.3'))
         with patch.object(release, 'registry_data', return_value=data):
             self.assertTrue(release.registry_matches(folder, item, '1.2.3'))
-        with patch.object(release, 'registry_data', return_value=npm_archive(body=b'collision')):
-            with self.assertRaisesRegex(ValueError, 'different contents'):
-                release.registry_matches(folder, item, '1.2.3')
+        with patch.object(release, 'registry_data', return_value=npm_archive(body=b'collision')), \
+                self.assertRaisesRegex(ValueError, 'different contents'):
+            release.registry_matches(folder, item, '1.2.3')
 
     def test_nuget_comparison_excludes_only_signature(self):
         def package(signature, assembly=b'assembly'):
@@ -202,9 +201,8 @@ class ReleaseTests(unittest.TestCase):
         error = urllib.error.HTTPError('https://example.com', 403, 'forbidden', {}, None)
         self.addCleanup(error.close)
         with patch('urllib.request.OpenerDirector.open', side_effect=error) as opened, \
-                patch('release.time.sleep') as slept:
-            with self.assertRaises(urllib.error.HTTPError):
-                release.download('https://example.com', missing=True)
+                patch('release.time.sleep') as slept, self.assertRaises(urllib.error.HTTPError):
+            release.download('https://example.com', missing=True)
         # A definite client-side answer is final: no retry, no pause.
         self.assertEqual(opened.call_count, 1)
         slept.assert_not_called()
@@ -227,9 +225,9 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual([call.args[0] for call in slept.call_args_list],
                          [release.DOWNLOAD_PAUSE, release.DOWNLOAD_PAUSE * 2])
         with patch('urllib.request.OpenerDirector.open', side_effect=[reset] * release.DOWNLOAD_ATTEMPTS) as opened, \
-                patch('release.time.sleep') as slept:
-            with self.assertRaisesRegex(RuntimeError, 'Download failed after 5 attempts'):
-                release.download('https://example.com/file')
+                patch('release.time.sleep') as slept, \
+                self.assertRaisesRegex(RuntimeError, 'Download failed after 5 attempts'):
+            release.download('https://example.com/file')
         self.assertEqual(opened.call_count, 5)
         # A doubling pause outlasts the gateway timeouts a release asset has answered with.
         self.assertEqual([call.args[0] for call in slept.call_args_list], [2.0, 4.0, 8.0, 16.0])
@@ -270,9 +268,8 @@ class ReleaseTests(unittest.TestCase):
         with patch.object(release, 'verify', return_value=record), \
                 patch.object(release, 'registry_matches', return_value=True), \
                 patch.object(release, 'registry_indexed', return_value=False), \
-                patch.object(release.time, 'sleep'):
-            with self.assertRaisesRegex(ValueError, 'indexing timed out'):
-                release.registry_status(self.root, 'v1.0.1', self.repo, wait=True)
+                patch.object(release.time, 'sleep'), self.assertRaisesRegex(ValueError, 'indexing timed out'):
+            release.registry_status(self.root, 'v1.0.1', self.repo, wait=True)
         # status answers about the bytes alone: a published, not yet indexed version exists.
         with patch.object(release, 'verify', return_value=record), \
                 patch.object(release, 'registry_matches', return_value=True), \
@@ -331,9 +328,9 @@ class ReleaseTests(unittest.TestCase):
                 patch.object(release, 'invoke') as run:
             release.github_draft(self.root, 'v1.2.3', self.repo)
             run.assert_not_called()
-        with patch.object(release, 'find_release', return_value={'tag_name': 'v1.2.3', 'draft': False, 'target_commitish': 'other'}):
-            with self.assertRaisesRegex(ValueError, 'source differs'):
-                release.github_draft(self.root, 'v1.2.3', self.repo)
+        with patch.object(release, 'find_release', return_value={'tag_name': 'v1.2.3', 'draft': False, 'target_commitish': 'other'}), \
+                self.assertRaisesRegex(ValueError, 'source differs'):
+            release.github_draft(self.root, 'v1.2.3', self.repo)
         refused = subprocess.CompletedProcess([], 1, stdout='', stderr='HTTP 403: Resource not accessible by integration')
         with patch.object(release, 'find_release', return_value=None), \
                 patch.object(release, 'invoke', return_value=refused):

@@ -3,10 +3,10 @@
 import argparse
 import hashlib
 import json
-from pathlib import Path
 import re
 import stat
 import zipfile
+from pathlib import Path
 
 
 def source_file(root, relative):

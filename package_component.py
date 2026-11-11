@@ -137,7 +137,7 @@ def write_archive(files, archive):
 
 
 def git_head(root):
-    result = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=root, text=True, capture_output=True)
+    result = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=root, text=True, capture_output=True, check=False)
     return result.stdout.strip() if result.returncode == 0 else None
 
 
@@ -329,8 +329,7 @@ def main():
     output = os.environ.get('GITHUB_OUTPUT')
     if output:
         with open(output, 'a') as handle:
-            for key in ('component', 'version', 'commit', 'name', 'digest', 'ref'):
-                handle.write(f'{key}={done[key]}\n')
+            handle.writelines(f'{key}={done[key]}\n' for key in ('component', 'version', 'commit', 'name', 'digest', 'ref'))
             handle.write(f'reused={"true" if done["reused"] else "false"}\n')
 
 

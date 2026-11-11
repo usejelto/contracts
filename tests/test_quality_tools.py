@@ -68,9 +68,8 @@ class InstallTest(unittest.TestCase):
 
     def test_refuses_a_download_whose_checksum_differs(self):
         payload = tarball('demo', b'tampered')
-        with mock.patch.object(install_tools, 'download', return_value=payload):
-            with self.assertRaisesRegex(install_tools.ToolError, 'does not match the pin'):
-                install_tools.install('demo', self.tools(payload, sha256='0' * 64))
+        with mock.patch.object(install_tools, 'download', return_value=payload), self.assertRaisesRegex(install_tools.ToolError, 'does not match the pin'):
+            install_tools.install('demo', self.tools(payload, sha256='0' * 64))
         self.assertEqual(list(Path(self.cache.name).rglob('demo')), [Path(self.cache.name) / 'demo'],
                          'a refused download must leave no binary behind')
 
@@ -89,9 +88,8 @@ class InstallTest(unittest.TestCase):
 
     def test_refuses_an_archive_without_exactly_one_binary(self):
         payload = tarball('other', b'x')
-        with mock.patch.object(install_tools, 'download', return_value=payload):
-            with self.assertRaisesRegex(install_tools.ToolError, 'expected one file named demo'):
-                install_tools.install('demo', self.tools(payload))
+        with mock.patch.object(install_tools, 'download', return_value=payload), self.assertRaisesRegex(install_tools.ToolError, 'expected one file named demo'):
+            install_tools.install('demo', self.tools(payload))
 
 
 class ManifestValidationTest(unittest.TestCase):
@@ -118,7 +116,7 @@ class CommitMessageHookTest(unittest.TestCase):
             path = Path(directory) / 'COMMIT_EDITMSG'
             path.write_text(message)
             return subprocess.run(['sh', str(QUALITY / 'githooks' / 'commit-msg'), str(path)],
-                                  capture_output=True, text=True, cwd=directory).returncode
+                                  capture_output=True, text=True, cwd=directory, check=False).returncode
 
     def test_accepts_conventional_subjects(self):
         for subject in ['fix(query): keep a failed read out of the zero bucket',

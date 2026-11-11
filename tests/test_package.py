@@ -1,12 +1,12 @@
 import hashlib
 import importlib.util
 import json
-from pathlib import Path
 import subprocess
-import tempfile
 import sys
+import tempfile
 import unittest
 import zipfile
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from package import build_archive

@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := test
-.PHONY: build test test-package conformance conformance-twice package signatures check security govulncheck lint
+.PHONY: build test test-package conformance conformance-twice package signatures check security govulncheck lint ruff
 GO ?= go
 PYTHON ?= python3
 EXE := $(if $(filter Windows_NT,$(OS)),.exe,)
@@ -22,7 +22,12 @@ check: lint test build package security conformance-twice
 # golangci-lint (.golangci.yml) against the findings that predate it, 19
 # unchecked Fprint and Remove errors in the command-line tools.
 GOLANGCI_BASELINE := .golangci-baseline.json
-lint: golangci
+lint: golangci ruff
+
+# The release, packaging and quality tooling and its tests (ruff.toml).
+ruff:
+	$(QUALITY_TOOL) run ruff check --no-cache .
+	$(QUALITY_TOOL) run ruff format --no-cache --check .
 
 security: secrets workflow-audit osv govulncheck
 
