@@ -1,0 +1,53 @@
+{
+  "_comment": "Findings that predate the linter, reviewed when it was adopted. Fix them and shrink this file; never add to it to make a check pass. Rewritten by lint_baseline.py write.",
+  "findings": [
+    {
+      "path": "spec/conformance/mockd/main.go",
+      "linter": "errcheck",
+      "text": "Error return value of `fmt.Fprint` is not checked",
+      "count": 1
+    },
+    {
+      "path": "spec/conformance/mockd/mockd_test.go",
+      "linter": "errcheck",
+      "text": "Error return value of `os.RemoveAll` is not checked",
+      "count": 2
+    },
+    {
+      "path": "spec/conformance/refhost/atomic.go",
+      "linter": "errcheck",
+      "text": "Error return value of `os.Remove` is not checked",
+      "count": 1
+    },
+    {
+      "path": "spec/conformance/refhost/main.go",
+      "linter": "errcheck",
+      "text": "Error return value of `fmt.Fprintf` is not checked",
+      "count": 1
+    },
+    {
+      "path": "spec/conformance/refhost/main.go",
+      "linter": "errcheck",
+      "text": "Error return value of `fmt.Fprintln` is not checked",
+      "count": 4
+    },
+    {
+      "path": "spec/conformance/runner/hostproc.go",
+      "linter": "errcheck",
+      "text": "Error return value is not checked",
+      "count": 1
+    },
+    {
+      "path": "spec/conformance/runner/main.go",
+      "linter": "errcheck",
+      "text": "Error return value of `fmt.Fprintf` is not checked",
+      "count": 8
+    },
+    {
+      "path": "spec/wirecheck/dogfood/main.go",
+      "linter": "errcheck",
+      "text": "Error return value of `file.Close` is not checked",
+      "count": 1
+    }
+  ]
+}

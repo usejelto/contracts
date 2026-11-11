@@ -1,0 +1,22 @@
+# golangci-lint for the contracts module (the conformance runner, mock
+# server, reference host, wire checker and signature data). `make lint` runs
+# it and compares the report with .golangci-baseline.json: the findings that
+# predate this file are listed there, only a new one fails, and a fixed one
+# must leave the baseline in the same change.
+version: "2"
+
+linters:
+  # errcheck, govet, ineffassign, staticcheck and unused.
+  default: standard
+
+formatters:
+  # CONTRIBUTING: format Go changes with gofmt.
+  enable:
+    - gofmt
+
+issues:
+  # Report every finding, including two on one line, so the baseline
+  # comparison sees all of them.
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  uniq-by-line: false

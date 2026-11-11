@@ -69,10 +69,6 @@ func (c *Clock) DayIndex() string {
 	return new(big.Int).Div(c.Now(), millisPerDay).String()
 }
 
-// deadline is an absolute instant on the SDK's clock. The zero value means
-// "no deadline set", which is why it is a pointer everywhere it is stored.
-type deadline = big.Int
-
 // after returns now + millis.
 func after(now *big.Int, millis int64) *big.Int {
 	return new(big.Int).Add(now, big.NewInt(millis))

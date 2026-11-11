@@ -28,7 +28,8 @@ make hooks   # once per clone
 make check   # the whole gate; CI runs the same command
 ```
 
-`make check` runs `test`, `build`, `package`, `security` and `conformance-twice`.
+`make check` runs `lint`, `test`, `build`, `package`, `security` and
+`conformance-twice`.
 Run the smallest relevant target while iterating, then `make check`.
 Documentation-only changes need link and example review; SDK behavior or wire
 changes require the appropriate tests and two consecutive conformance passes
@@ -53,6 +54,7 @@ repository consumes as a checksummed snapshot, so change them here.
 
 | Target | Tool | What it checks |
 |---|---|---|
+| `make lint` | golangci-lint | `.golangci.yml`: the standard linters and gofmt, against `.golangci-baseline.json` |
 | `make secrets` | gitleaks | the whole Git history for credentials |
 | `make workflow-audit` | actionlint, zizmor | workflow syntax, script injection, permissions and pinning |
 | `make osv` | OSV-Scanner | `go.sum` against the OSV database, downloaded and matched locally |
@@ -70,6 +72,11 @@ place it applies, with the reason beside it:
 - zizmor: `# zizmor: ignore[<audit>]` on the line, with the reason above it;
 - OSV-Scanner: an `[[IgnoredVulns]]` entry in `osv-scanner.toml` with a
   `reason` and an `ignoreUntil` date.
+
+- golangci-lint: `//nolint:<linter> // <reason>` on the line. The baseline
+  holds findings that predate the linter; a fix removes its entry (`make
+  lint-baseline`, then review the diff), and nothing is added to it to make a
+  check pass.
 
 Never disable a rule, a file or a directory wholesale, and never relax a
 threshold to make a check pass.

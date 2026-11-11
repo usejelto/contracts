@@ -412,10 +412,7 @@ func (s *SDK) Stop() {
 	s.notify()
 
 	deadline := time.After(terminationBudget)
-	for {
-		if s.queue.Len() == 0 {
-			break
-		}
+	for s.queue.Len() != 0 {
 		select {
 		case <-deadline:
 			s.log.Printf("termination flush gave up with %d events queued (best effort, RFC-0001 §8.3 item 7)", s.queue.Len())

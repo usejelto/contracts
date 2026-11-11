@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := test
-.PHONY: build test test-package conformance conformance-twice package signatures check security govulncheck
+.PHONY: build test test-package conformance conformance-twice package signatures check security govulncheck lint
 GO ?= go
 PYTHON ?= python3
 EXE := $(if $(filter Windows_NT,$(OS)),.exe,)
@@ -17,7 +17,12 @@ include tools/quality/quality.mk
 # The whole gate: what to run before a pull request, and what CI runs on Linux.
 # The Windows row repeats the platform-sensitive part (test build package and
 # conformance); the scanners are platform-independent.
-check: test build package security conformance-twice
+check: lint test build package security conformance-twice
+
+# golangci-lint (.golangci.yml) against the findings that predate it, 19
+# unchecked Fprint and Remove errors in the command-line tools.
+GOLANGCI_BASELINE := .golangci-baseline.json
+lint: golangci
 
 security: secrets workflow-audit osv govulncheck
 
