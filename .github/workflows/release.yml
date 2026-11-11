@@ -66,7 +66,8 @@ jobs:
   checks:
     needs: [validate, previous]
     if: needs.previous.outputs.run_id == ''
-    uses: ./.github/workflows/ci.yml
+    # actionlint 1.7.12 rejects the self-repository $/ form, so ./ stays until it accepts it.
+    uses: ./.github/workflows/ci.yml # zizmor: ignore[self-repository]
     with:
       release: true
 

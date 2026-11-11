@@ -10,3 +10,7 @@ updates:
     groups:
       actions:
         patterns: ['*']
+    # A release must be a week old before it is proposed, so a compromised
+    # version is usually withdrawn before it can reach this repository.
+    cooldown:
+      default-days: 7

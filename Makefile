@@ -9,7 +9,7 @@ VERSION := $(shell $(PYTHON) -c 'import json; print(json.load(open("spec/contrac
 # maintained here and vendored into every other Jelto repository.
 include tools/quality/quality.mk
 
-security: secrets
+security: secrets workflow-audit
 
 build:
 	mkdir -p bin
