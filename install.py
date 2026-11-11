@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Install a checksum-pinned Jelto contracts archive into an empty directory."""
+
 import argparse
 import hashlib
 import json
@@ -25,7 +26,13 @@ def install(archive, checksum, destination, expected_version=VERSION):
             raise ValueError('Invalid contracts archive entries/size')
         for entry in entries:
             path = PurePosixPath(entry.filename)
-            if path.is_absolute() or '..' in path.parts or '\\' in entry.filename or ':' in entry.filename or stat.S_ISLNK(entry.external_attr >> 16):
+            if (
+                path.is_absolute()
+                or '..' in path.parts
+                or '\\' in entry.filename
+                or ':' in entry.filename
+                or stat.S_ISLNK(entry.external_attr >> 16)
+            ):
                 raise ValueError('Unsafe contracts archive path')
         manifest = json.loads(package.read('manifest.json'))
         if manifest.get('name') != 'jelto-contracts' or manifest.get('version') != expected_version:

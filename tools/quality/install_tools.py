@@ -100,7 +100,7 @@ def download(url):
             return data
         except (OSError, ValueError) as error:
             last = error
-            time.sleep(2 ** attempt)
+            time.sleep(2**attempt)
     raise ToolError(f'{url}: download failed: {last}')
 
 
@@ -110,8 +110,7 @@ def extract_binary(data, binary, url):
     if not url.endswith(('.tar.gz', '.tgz')):
         return data
     with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as archive:
-        members = [m for m in archive.getmembers()
-                   if m.isreg() and Path(m.name).name == binary]
+        members = [m for m in archive.getmembers() if m.isreg() and Path(m.name).name == binary]
         if len(members) != 1:
             raise ToolError(f'{url}: expected one file named {binary}, found {len(members)}')
         return archive.extractfile(members[0]).read()
@@ -156,8 +155,10 @@ def install(name, tools):
         if 'assets' in tool:
             asset = tool['assets'].get(target)
             if not asset:
-                raise ToolError(f'{name} {tool["version"]} has no pinned asset for {target}; '
-                                f'pinned: {", ".join(sorted(tool["assets"]))}')
+                raise ToolError(
+                    f'{name} {tool["version"]} has no pinned asset for {target}; '
+                    f'pinned: {", ".join(sorted(tool["assets"]))}'
+                )
             data = download(asset['url'])
             digest = hashlib.sha256(data).hexdigest()
             if digest != asset['sha256']:
@@ -168,8 +169,7 @@ def install(name, tools):
         elif 'go' in tool:
             env = {k: v for k, v in os.environ.items() if k not in {'GOFLAGS', 'GOWORK'}}
             env.update(GOBIN=str(staging), GOWORK='off', GOFLAGS='-mod=mod')
-            subprocess.run(['go', 'install', f'{tool["go"]}@{tool["version"]}'],
-                           check=True, env=env, cwd=staging)
+            subprocess.run(['go', 'install', f'{tool["go"]}@{tool["version"]}'], check=True, env=env, cwd=staging)
             if not (staging / tool['binary']).is_file():
                 raise ToolError(f'go install {tool["go"]} produced no {tool["binary"]}')
         else:
@@ -178,8 +178,9 @@ def install(name, tools):
             subprocess.run(['git', 'init', '--quiet', str(staging)], check=True)
             subprocess.run([*git, 'fetch', '--quiet', '--depth', '1', tool['git'], commit], check=True)
             subprocess.run([*git, 'checkout', '--quiet', 'FETCH_HEAD'], check=True)
-            head = subprocess.run([*git, 'rev-parse', 'HEAD'], check=True,
-                                  capture_output=True, text=True).stdout.strip()
+            head = subprocess.run(
+                [*git, 'rev-parse', 'HEAD'], check=True, capture_output=True, text=True
+            ).stdout.strip()
             if head != commit:
                 raise ToolError(f'{tool["git"]}: fetched {head}, pinned {commit}')
             shutil.rmtree(staging / '.git')

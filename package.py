@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Export the versioned wire/conformance tools without the backend checkout."""
+
 import argparse
 import hashlib
 import json
@@ -25,15 +26,22 @@ def build_archive(root, destination):
     config = json.loads((root / 'spec/contracts/manifest.json').read_text())
     semver = r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?'
     match = re.fullmatch(semver, config['version'])
-    if (config['name'] != 'jelto-contracts' or not match
-            or (match[4] and any(re.fullmatch(r'0[0-9]+', part) for part in match[4].split('.')))):
+    if (
+        config['name'] != 'jelto-contracts'
+        or not match
+        or (match[4] and any(re.fullmatch(r'0[0-9]+', part) for part in match[4].split('.')))
+    ):
         raise ValueError('Invalid contracts package identity/version')
     files = dict(config['files'])
     for directory in config['directories']:
         for source in sorted(source_file(root, directory).rglob('*')):
             relative = source.relative_to(root).as_posix()
             source_file(root, relative)
-            if source.is_file() and source.suffix in {'.go', '.yaml', '.json', '.md', '.txt'} and source.name != 'TODO.md':
+            if (
+                source.is_file()
+                and source.suffix in {'.go', '.yaml', '.json', '.md', '.txt'}
+                and source.name != 'TODO.md'
+            ):
                 if relative in files:
                     raise ValueError(f'Duplicate contract source: {relative}')
                 files[relative] = relative
@@ -43,7 +51,8 @@ def build_archive(root, destination):
             raise ValueError(f'Invalid contract artifact path: {name}')
         content[name] = source_file(root, source).read_bytes()
     manifest = {
-        'name': config['name'], 'version': config['version'],
+        'name': config['name'],
+        'version': config['version'],
         'files': {name: hashlib.sha256(data).hexdigest() for name, data in sorted(content.items())},
     }
     content['manifest.json'] = (json.dumps(manifest, indent=2) + '\n').encode()

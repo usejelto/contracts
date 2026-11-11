@@ -35,8 +35,7 @@ def knip_findings(data):
                     line = item[0].get('line', 0) if item else 0
                 else:
                     name, line = item.get('name', ''), item.get('line', 0)
-                yield {'FromLinter': f'knip:{category}', 'Text': name,
-                       'Pos': {'Filename': issue['file'], 'Line': line}}
+                yield {'FromLinter': f'knip:{category}', 'Text': name, 'Pos': {'Filename': issue['file'], 'Line': line}}
 
 
 def findings(report_path):
@@ -67,12 +66,20 @@ def load(baseline_path):
 
 def write(found, baseline_path):
     entries = [{'path': p, 'linter': l, 'text': t, 'count': n} for (p, l, t), n in sorted(found.items())]
-    Path(baseline_path).write_text(json.dumps({
-        '_comment': ('Findings that predate the linter, reviewed when it was adopted. '
-                     'Fix them and shrink this file; never add to it to make a check pass. '
-                     'Rewritten by lint_baseline.py write.'),
-        'findings': entries,
-    }, indent=2) + '\n')
+    Path(baseline_path).write_text(
+        json.dumps(
+            {
+                '_comment': (
+                    'Findings that predate the linter, reviewed when it was adopted. '
+                    'Fix them and shrink this file; never add to it to make a check pass. '
+                    'Rewritten by lint_baseline.py write.'
+                ),
+                'findings': entries,
+            },
+            indent=2,
+        )
+        + '\n'
+    )
     print(f'{baseline_path}: {sum(found.values())} findings in {len(entries)} entries')
 
 
@@ -87,10 +94,13 @@ def check(found, where, baseline):
     kept = sum((found & baseline).values())
     if new or gone:
         if gone:
-            print('lint_baseline: remove the fixed entries with `make lint-baseline` and review the diff',
-                  file=sys.stderr)
-        print(f'lint_baseline: {sum(new.values())} new, {sum(gone.values())} fixed but listed, '
-              f'{kept} known', file=sys.stderr)
+            print(
+                'lint_baseline: remove the fixed entries with `make lint-baseline` and review the diff', file=sys.stderr
+            )
+        print(
+            f'lint_baseline: {sum(new.values())} new, {sum(gone.values())} fixed but listed, {kept} known',
+            file=sys.stderr,
+        )
         return 1
     print(f'lint_baseline: no new findings ({kept} known, listed in the baseline)')
     return 0

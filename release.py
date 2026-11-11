@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Standalone release tools. SDKs consume a checksummed copy; no backend imports."""
+
 import argparse
 import hashlib
 import http.client
@@ -26,8 +27,9 @@ SEMVER = re.compile(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+
 
 
 def run(*args, cwd=None, env=None):
-    return subprocess.check_output([shutil.which(args[0]) or args[0], *map(str, args[1:])],
-                                   cwd=cwd, env=env, text=True).strip()
+    return subprocess.check_output(
+        [shutil.which(args[0]) or args[0], *map(str, args[1:])], cwd=cwd, env=env, text=True
+    ).strip()
 
 
 def version(value):
@@ -57,8 +59,11 @@ def identity(root):
                 raise ValueError('Electron client version mismatch')
         if component == 'tauri':
             crate = tomllib.loads((root / 'Cargo.toml').read_text())['package']
-            locked = next(p for p in tomllib.loads((root / 'Cargo.lock').read_text())['package']
-                          if p['name'] == 'tauri-plugin-jelto')
+            locked = next(
+                p
+                for p in tomllib.loads((root / 'Cargo.lock').read_text())['package']
+                if p['name'] == 'tauri-plugin-jelto'
+            )
             if crate['name'] != 'tauri-plugin-jelto' or crate['version'] != value or locked['version'] != value:
                 raise ValueError('Tauri npm/Rust/lockfile version mismatch')
     elif component == 'dotnet':
@@ -179,18 +184,27 @@ def install_contracts(root):
     with tempfile.TemporaryDirectory(prefix='jelto-contract-pin-') as temp:
         archive = Path(temp) / 'contracts.zip'
         archive.write_bytes(data)
-        run(sys.executable, root / 'vendor/test-tools/install.py', archive, pin['sha256'], root / '.contracts',
-            '--version', pin['version'])
+        run(
+            sys.executable,
+            root / 'vendor/test-tools/install.py',
+            archive,
+            pin['sha256'],
+            root / '.contracts',
+            '--version',
+            pin['version'],
+        )
 
 
 def archive_files(data, kind):
     """Compare logical package contents; reject aliases and unsafe archive entries."""
     output = {}
+
     def add(name, body):
         path = PurePosixPath(name)
         if path.is_absolute() or '..' in path.parts or '\\' in name or ':' in name or name in output:
             raise ValueError('Unsafe or duplicate package entry')
         output[name] = body
+
     if kind in {'npm', 'cargo'}:
         with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as archive:
             for entry in archive:
@@ -222,12 +236,14 @@ def check_package(path, kind, name, value):
         if manifest.get('license') == 'MIT' and 'package/LICENSE' not in files:
             raise ValueError('npm artifact is missing LICENSE')
         paths = []
+
         def exports(node):
             if isinstance(node, str):
                 paths.append(node)
             elif isinstance(node, dict):
                 for child in node.values():
                     exports(child)
+
         exports(manifest.get('exports', {}))
         paths.extend(manifest[key] for key in ('main', 'module', 'types') if key in manifest)
         for entry in paths:
@@ -235,10 +251,20 @@ def check_package(path, kind, name, value):
                 raise ValueError('Missing npm package entry: ' + entry)
     elif kind == 'cargo':
         prefix = name + '-' + value + '/'
-        allowed = {'Cargo.toml', 'Cargo.toml.orig', 'Cargo.lock', '.cargo_vcs_info.json', 'build.rs', 'README.md', 'LICENSE'}
+        allowed = {
+            'Cargo.toml',
+            'Cargo.toml.orig',
+            'Cargo.lock',
+            '.cargo_vcs_info.json',
+            'build.rs',
+            'README.md',
+            'LICENSE',
+        }
         for filename in files:
             relative = filename.removeprefix(prefix)
-            if not filename.startswith(prefix) or not (relative in allowed or relative.startswith(('src/', 'permissions/'))):
+            if not filename.startswith(prefix) or not (
+                relative in allowed or relative.startswith(('src/', 'permissions/'))
+            ):
                 raise ValueError('Unexpected file in Cargo package: ' + filename)
         manifest = tomllib.loads(files[prefix + 'Cargo.toml'].decode())['package']
         if manifest['name'] != name or manifest['version'] != value:
@@ -275,10 +301,14 @@ def stage(root, tag, repo):
     if component in {'analytics', 'crawler', 'electron', 'tauri'}:
         filename = 'jelto-' + component + '-' + value + '.tgz'
         # Packaged by CI before credentials are available.
-        candidates.append((root / (('artifacts/' if component == 'tauri' else '') + filename), 'npm', '@jelto/' + component))
+        candidates.append(
+            (root / (('artifacts/' if component == 'tauri' else '') + filename), 'npm', '@jelto/' + component)
+        )
     if component == 'tauri':
         # Cargo dry-run verifies the actual package from the tagged Git checkout.
-        candidates.append((root / ('target/package/tauri-plugin-jelto-' + value + '.crate'), 'cargo', 'tauri-plugin-jelto'))
+        candidates.append(
+            (root / ('target/package/tauri-plugin-jelto-' + value + '.crate'), 'cargo', 'tauri-plugin-jelto')
+        )
     elif component == 'dotnet':
         candidates.append((root / ('artifacts/Jelto.' + value + '.nupkg'), 'nuget', 'Jelto'))
     elif component in {'swift', 'contracts'}:
@@ -290,14 +320,23 @@ def stage(root, tag, repo):
     for path, kind, name in candidates:
         check_package(path, kind, name, value)
         shutil.copy2(path, output / path.name)
-        packages.append({'file': path.name, 'kind': kind, 'name': name,
-                         'sha256': hashlib.sha256(path.read_bytes()).hexdigest()})
-    record = {'repository': repo, 'tag': tag, 'version': value, 'component': component,
-              'commit': run('git', 'rev-parse', 'HEAD', cwd=root), 'packages': packages}
+        packages.append(
+            {'file': path.name, 'kind': kind, 'name': name, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+        )
+    record = {
+        'repository': repo,
+        'tag': tag,
+        'version': value,
+        'component': component,
+        'commit': run('git', 'rev-parse', 'HEAD', cwd=root),
+        'packages': packages,
+    }
     (output / 'release.json').write_text(json.dumps(record, indent=2) + '\n')
-    (output / 'CHECKSUMS').write_text(''.join(
-        hashlib.sha256(path.read_bytes()).hexdigest() + '  ' + path.name + '\n'
-        for path in sorted(output.iterdir())))
+    (output / 'CHECKSUMS').write_text(
+        ''.join(
+            hashlib.sha256(path.read_bytes()).hexdigest() + '  ' + path.name + '\n' for path in sorted(output.iterdir())
+        )
+    )
     # Preserve the conventional contracts checksum asset name.
     if component == 'contracts':
         item = packages[0]
@@ -322,14 +361,20 @@ def verify(root, tag, repo):
     validate(root, tag, repo)
     folder = root / 'release-artifacts'
     record = json.loads((folder / 'release.json').read_text())
-    if (record['tag'], record['repository'], record['commit']) != (tag, repo, run('git', 'rev-parse', 'HEAD', cwd=root)):
+    if (record['tag'], record['repository'], record['commit']) != (
+        tag,
+        repo,
+        run('git', 'rev-parse', 'HEAD', cwd=root),
+    ):
         raise ValueError('Artifact source identity mismatch')
     if record['component'] != identity(root)[0] or record['version'] != tag[1:]:
         raise ValueError('Artifact component/version mismatch')
     component, value = record['component'], record['version']
     required = required_packages(component, value)
-    if (len(record['packages']) != len(required)
-            or {(item['kind'], item['name'], item['file']) for item in record['packages']} != required):
+    if (
+        len(record['packages']) != len(required)
+        or {(item['kind'], item['name'], item['file']) for item in record['packages']} != required
+    ):
         raise ValueError('Release packages do not match the component')
     expected = {'release.json', 'CHECKSUMS'}
     for item in record['packages']:
@@ -348,8 +393,10 @@ def verify(root, tag, repo):
             raise ValueError('Contracts checksum asset mismatch')
     if {p.name for p in folder.iterdir()} != expected:
         raise ValueError('Unexpected release artifact files')
-    checksums = ''.join(hashlib.sha256((folder / name).read_bytes()).hexdigest() + '  ' + name + '\n'
-                        for name in sorted(expected - {'CHECKSUMS'} - {n for n in expected if n.endswith('.sha256')}))
+    checksums = ''.join(
+        hashlib.sha256((folder / name).read_bytes()).hexdigest() + '  ' + name + '\n'
+        for name in sorted(expected - {'CHECKSUMS'} - {n for n in expected if n.endswith('.sha256')})
+    )
     if (folder / 'CHECKSUMS').read_text() != checksums:
         raise ValueError('Release checksum manifest mismatch')
     return record
@@ -363,10 +410,17 @@ def registry_data(item, value):
     if item['kind'] == 'cargo':
         # API metadata distinguishes missing versions from transport/auth failures.
         metadata = download('https://crates.io/api/v1/crates/' + name + '/' + value, missing=True)
-        return None if metadata is None else download('https://static.crates.io/crates/' + name + '/' + name + '-' + value + '.crate')
+        return (
+            None
+            if metadata is None
+            else download('https://static.crates.io/crates/' + name + '/' + name + '-' + value + '.crate')
+        )
     if item['kind'] == 'nuget':
         name, value = name.lower(), value.lower()
-        return download('https://api.nuget.org/v3-flatcontainer/' + name + '/' + value + '/' + name + '.' + value + '.nupkg', missing=True)
+        return download(
+            'https://api.nuget.org/v3-flatcontainer/' + name + '/' + value + '/' + name + '.' + value + '.nupkg',
+            missing=True,
+        )
     return None
 
 
@@ -383,15 +437,19 @@ def registry_indexed(item, value):
     name = item['name']
     if item['kind'] == 'npm':
         # The representation npm's resolver requests; the CDN caches it on its own.
-        data = download('https://registry.npmjs.org/' + urllib.parse.quote(name, safe=''), missing=True,
-                        accept='application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8, */*')
+        data = download(
+            'https://registry.npmjs.org/' + urllib.parse.quote(name, safe=''),
+            missing=True,
+            accept='application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8, */*',
+        )
         return data is not None and value in json.loads(data).get('versions', {})
     if item['kind'] == 'cargo':
         lower = name.lower()
         prefix = {1: '1', 2: '2', 3: '3/' + lower[0]}.get(len(lower), lower[:2] + '/' + lower[2:4])
         data = download('https://index.crates.io/' + prefix + '/' + lower, missing=True)
         return data is not None and any(
-            json.loads(line)['vers'] == value for line in data.decode().splitlines() if line.strip())
+            json.loads(line)['vers'] == value for line in data.decode().splitlines() if line.strip()
+        )
     if item['kind'] == 'nuget':
         lower = name.lower()
         data = download('https://api.nuget.org/v3-flatcontainer/' + lower + '/index.json', missing=True)
@@ -405,8 +463,7 @@ def registry_matches(folder, item, value):
         return False
     # npm and Cargo bytes are immutable; NuGet adds a repository signature.
     local = (folder / item['file']).read_bytes()
-    same = (archive_files(local, 'nuget') == archive_files(data, 'nuget')
-            if item['kind'] == 'nuget' else local == data)
+    same = archive_files(local, 'nuget') == archive_files(data, 'nuget') if item['kind'] == 'nuget' else local == data
     if not same:
         raise ValueError('Published version has different contents: ' + item['name'])
     return True
@@ -445,7 +502,9 @@ def registry_status(root, tag, repo, wait=False, kind=None):
 
 def invoke(*args):
     """Run a command and return its completed process; unlike run(), a failure is reported, not raised."""
-    return subprocess.run([shutil.which(args[0]) or args[0], *map(str, args[1:])], capture_output=True, text=True, check=False)
+    return subprocess.run(
+        [shutil.which(args[0]) or args[0], *map(str, args[1:])], capture_output=True, text=True, check=False
+    )
 
 
 def gh_json(*args):
@@ -459,9 +518,11 @@ def find_release(tag, repo):
 
 
 def release_notes(record):
-    return ('Source: ' + record['commit'] + '\n\nComponent CI, package checks and conformance twice passed.'
-            '\n\nPublished artifacts and SHA-256 checksums are attached. '
-            'For bootstrap, publish only these verified packages from this exact tag.\n')
+    return (
+        'Source: ' + record['commit'] + '\n\nComponent CI, package checks and conformance twice passed.'
+        '\n\nPublished artifacts and SHA-256 checksums are attached. '
+        'For bootstrap, publish only these verified packages from this exact tag.\n'
+    )
 
 
 def github_draft(root, tag, repo):
@@ -482,8 +543,22 @@ def github_draft(root, tag, repo):
             raise ValueError('Existing GitHub Release source differs')
         print('GitHub Release ' + ('draft ' if existing['draft'] else '') + 'exists: ' + tag)
         return existing
-    args = ['gh', 'release', 'create', tag, '--repo', repo, '--verify-tag', '--draft',
-            '--target', record['commit'], '--title', tag, '--notes', release_notes(record)]
+    args = [
+        'gh',
+        'release',
+        'create',
+        tag,
+        '--repo',
+        repo,
+        '--verify-tag',
+        '--draft',
+        '--target',
+        record['commit'],
+        '--title',
+        tag,
+        '--notes',
+        release_notes(record),
+    ]
     if '-' in record['version']:
         args.append('--prerelease')
     result = invoke(*args)
@@ -493,9 +568,17 @@ def github_draft(root, tag, repo):
             raise ValueError(
                 detail + '\n\nThe workflow token could not open the draft release. Open it once by hand, '
                 'then rerun this tag; the rerun uploads the assets and publishes the draft:\n'
-                '  gh api -X POST repos/' + repo + '/releases -f tag_name=' + tag
-                + ' -f target_commitish=' + record['commit'] + ' -f name=' + tag
-                + ' -F draft=true -f body=' + shlex.quote('Source: ' + record['commit']))
+                '  gh api -X POST repos/'
+                + repo
+                + '/releases -f tag_name='
+                + tag
+                + ' -f target_commitish='
+                + record['commit']
+                + ' -f name='
+                + tag
+                + ' -F draft=true -f body='
+                + shlex.quote('Source: ' + record['commit'])
+            )
         raise ValueError(detail or ('gh release create failed with status ' + str(result.returncode)))
     print('GitHub Release draft opened: ' + tag)
     return find_release(tag, repo)
@@ -522,8 +605,17 @@ def github_release(root, tag, repo):
                     raise ValueError('Completed release is missing an expected asset')
                 run('gh', 'release', 'upload', tag, path, '--repo', repo)
         if details['isDraft']:
-            run('gh', 'release', 'edit', tag, '--repo', repo, '--draft=false',
-                '--prerelease=' + str('-' in record['version']).lower(), '--latest=' + str('-' not in record['version']).lower())
+            run(
+                'gh',
+                'release',
+                'edit',
+                tag,
+                '--repo',
+                repo,
+                '--draft=false',
+                '--prerelease=' + str('-' in record['version']).lower(),
+                '--latest=' + str('-' not in record['version']).lower(),
+            )
 
 
 def previous_run(repo, sha, workflow_file, current):
@@ -542,7 +634,9 @@ def previous_run(repo, sha, workflow_file, current):
         checks = [job for job in jobs if job['name'].startswith('checks')]
         if not checks or any(job['conclusion'] != 'success' for job in checks):
             continue
-        artifacts = gh_json('repos/' + repo + '/actions/runs/' + str(entry['id']) + '/artifacts?per_page=100')['artifacts']
+        artifacts = gh_json('repos/' + repo + '/actions/runs/' + str(entry['id']) + '/artifacts?per_page=100')[
+            'artifacts'
+        ]
         if not any(a['name'].startswith('release-') and not a['expired'] for a in artifacts):
             continue
         return entry['id']
@@ -552,13 +646,18 @@ def previous_run(repo, sha, workflow_file, current):
 def previous(root, tag, repo):
     validate(root, tag, repo)
     workflow_file = os.environ['GITHUB_WORKFLOW_REF'].split('@')[0].rsplit('/', 1)[1]
-    found = previous_run(repo, run('git', 'rev-parse', 'HEAD', cwd=root), workflow_file, os.environ.get('GITHUB_RUN_ID', ''))
+    found = previous_run(
+        repo, run('git', 'rev-parse', 'HEAD', cwd=root), workflow_file, os.environ.get('GITHUB_RUN_ID', '')
+    )
     line = 'run_id=' + (str(found) if found else '') + '\n'
     if os.environ.get('GITHUB_OUTPUT'):
         with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
             output.write(line)
-    print(('Reusing the verified artifacts of run ' + str(found)) if found
-          else 'No earlier verified run for this commit; the checks run now.')
+    print(
+        ('Reusing the verified artifacts of run ' + str(found))
+        if found
+        else 'No earlier verified run for this commit; the checks run now.'
+    )
 
 
 def trust_evidence(kind, name):
@@ -577,8 +676,12 @@ def trust_evidence(kind, name):
         proven = sorted(v for v, meta in versions.items() if meta.get('dist', {}).get('attestations'))
         if proven:
             return 'ok', name + ': trusted publishing proven by ' + proven[-1]
-        return 'warn', (name + ': no version published with provenance yet; configure the Trusted Publisher at '
-                        'https://www.npmjs.com/package/' + name + '/access (GitHub Actions, workflow release.yml, environment release)')
+        return 'warn', (
+            name + ': no version published with provenance yet; configure the Trusted Publisher at '
+            'https://www.npmjs.com/package/'
+            + name
+            + '/access (GitHub Actions, workflow release.yml, environment release)'
+        )
     if kind == 'cargo':
         data = download('https://crates.io/api/v1/crates/' + name + '/versions', missing=True)
         if data is None:
@@ -586,8 +689,10 @@ def trust_evidence(kind, name):
         proven = sorted(v['num'] for v in json.loads(data).get('versions', []) if v.get('trustpub_data'))
         if proven:
             return 'ok', name + ': trusted publishing proven by ' + proven[-1]
-        return 'warn', (name + ': no version published through trusted publishing yet; configure it at '
-                        'https://crates.io/crates/' + name + '/settings/trusted-publishing')
+        return 'warn', (
+            name + ': no version published through trusted publishing yet; configure it at '
+            'https://crates.io/crates/' + name + '/settings/trusted-publishing'
+        )
     if kind == 'nuget':
         return 'note', name + ': NuGet exposes no provenance; confirm the trusted policy and NUGET_USER at nuget.org'
     return 'ok', name + ': GitHub Release asset only'
@@ -602,11 +707,19 @@ def doctor(root, repo):
         return subprocess.run([shutil.which('gh') or 'gh', *args], capture_output=True, text=True, check=False)
 
     variable = gh_ok('variable', 'get', 'RELEASE_PUBLISH_ENABLED', '--repo', repo)
-    findings.append(('ok' if variable.stdout.strip() == 'true' else 'fail',
-                     'RELEASE_PUBLISH_ENABLED is ' + (variable.stdout.strip() or 'unset') + ' on ' + repo))
+    findings.append(
+        (
+            'ok' if variable.stdout.strip() == 'true' else 'fail',
+            'RELEASE_PUBLISH_ENABLED is ' + (variable.stdout.strip() or 'unset') + ' on ' + repo,
+        )
+    )
     environment = gh_ok('api', 'repos/' + repo + '/environments/release')
-    findings.append(('ok' if environment.returncode == 0 else 'fail',
-                     'environment "release" ' + ('exists' if environment.returncode == 0 else 'is missing') + ' on ' + repo))
+    findings.append(
+        (
+            'ok' if environment.returncode == 0 else 'fail',
+            'environment "release" ' + ('exists' if environment.returncode == 0 else 'is missing') + ' on ' + repo,
+        )
+    )
     if component == 'dotnet':
         user = gh_ok('variable', 'get', 'NUGET_USER', '--repo', repo)
         findings.append(('ok' if user.stdout.strip() else 'fail', 'NUGET_USER is ' + (user.stdout.strip() or 'unset')))
@@ -632,8 +745,9 @@ def configure(root, repo, url=None, checksum=None, contracts_version='0.1.3'):
     readme = root / 'README.md'
     if readme.exists():
         content = readme.read_text().replace('](RELEASING.md)', '](' + address + '/blob/main/RELEASING.md)')
-        content = re.sub(r'https://github.com/[^/]+/[^/]+/blob/main/RELEASING\.md',
-                         address + '/blob/main/RELEASING.md', content)
+        content = re.sub(
+            r'https://github.com/[^/]+/[^/]+/blob/main/RELEASING\.md', address + '/blob/main/RELEASING.md', content
+        )
         readme.write_text(content)
     if (root / 'package.json').exists():
         package = json.loads((root / 'package.json').read_text())
@@ -651,7 +765,11 @@ def configure(root, repo, url=None, checksum=None, contracts_version='0.1.3'):
     if settings['component'] == 'dotnet':
         path = root / 'Jelto/Jelto.csproj'
         content = re.sub(r'    <RepositoryUrl>.*</RepositoryUrl>\n', '', path.read_text())
-        path.write_text(content.replace('  <PropertyGroup>\n', '  <PropertyGroup>\n    <RepositoryUrl>' + address + '</RepositoryUrl>\n', 1))
+        path.write_text(
+            content.replace(
+                '  <PropertyGroup>\n', '  <PropertyGroup>\n    <RepositoryUrl>' + address + '</RepositoryUrl>\n', 1
+            )
+        )
     print('Configured release metadata. Review and commit these files before tagging.')
 
 
@@ -667,8 +785,19 @@ def smoke(root, registry=False):
                 continue
             target = item['name'] + '@' + value if registry else str(root / 'release-artifacts' / item['file'])
             (temp / 'package.json').write_text('{"private":true,"type":"module"}')
-            run('npm', 'install', '--ignore-scripts', '--no-audit', '--no-fund', '--save-exact',
-                '--registry', 'https://registry.npmjs.org', target, cwd=temp, env=env)
+            run(
+                'npm',
+                'install',
+                '--ignore-scripts',
+                '--no-audit',
+                '--no-fund',
+                '--save-exact',
+                '--registry',
+                'https://registry.npmjs.org',
+                target,
+                cwd=temp,
+                env=env,
+            )
             package = json.loads((temp / 'node_modules' / item['name'] / 'package.json').read_text())
             statements = []
             for export in package.get('exports', {'.': None}):
@@ -691,8 +820,17 @@ def smoke(root, registry=False):
                     package.extractall(source)
                 run('git', 'init', '-b', 'main', cwd=source)
                 run('git', 'add', '.', cwd=source)
-                run('git', '-c', 'user.name=Release test', '-c', 'user.email=release-test@localhost',
-                    'commit', '-m', 'Test packaged sources', cwd=source)
+                run(
+                    'git',
+                    '-c',
+                    'user.name=Release test',
+                    '-c',
+                    'user.email=release-test@localhost',
+                    'commit',
+                    '-m',
+                    'Test packaged sources',
+                    cwd=source,
+                )
                 run('git', 'tag', record['tag'], cwd=source)
                 address = source.as_uri()
             package_identity = Path(urllib.parse.urlsplit(address).path).name.removesuffix('.git').lower()
@@ -704,12 +842,13 @@ def smoke(root, registry=False):
                 'let package = Package(name: "Consumer", platforms: [.macOS(.v12)], dependencies: ['
                 '.package(url: ' + json.dumps(address) + ', exact: ' + json.dumps(value) + ')],'
                 'targets: [.executableTarget(name: "Consumer", dependencies: [.product(name: "Jelto", package: '
-                + json.dumps(package_identity) + ')])])\n')
+                + json.dumps(package_identity)
+                + ')])])\n'
+            )
             run('swift', 'build', cwd=consumer)
         elif component == 'tauri' and registry:
             example = temp / 'example'
-            shutil.copytree(root / 'example', example,
-                            ignore=shutil.ignore_patterns('node_modules', 'target', 'dist'))
+            shutil.copytree(root / 'example', example, ignore=shutil.ignore_patterns('node_modules', 'target', 'dist'))
             package_path = example / 'package.json'
             package = json.loads(package_path.read_text())
             package['dependencies']['@jelto/tauri'] = value
@@ -722,8 +861,11 @@ def smoke(root, registry=False):
             entry.update(version=value, resolved=metadata['dist']['tarball'], integrity=metadata['dist']['integrity'])
             lock_path.write_text(json.dumps(lock, indent=2) + '\n')
             cargo_path = example / 'src-tauri/Cargo.toml'
-            content, changed = re.subn(r'tauri-plugin-jelto\s*=\s*\{[^}]*path[^}]*\}',
-                                      'tauri-plugin-jelto = "=' + value + '"', cargo_path.read_text())
+            content, changed = re.subn(
+                r'tauri-plugin-jelto\s*=\s*\{[^}]*path[^}]*\}',
+                'tauri-plugin-jelto = "=' + value + '"',
+                cargo_path.read_text(),
+            )
             if changed != 1:
                 raise ValueError('Cannot select registry crate in the native example')
             cargo_path.write_text(content)
@@ -734,10 +876,19 @@ def smoke(root, registry=False):
             # resolve and the spec matches nothing.
             run('cargo', 'fetch', '--manifest-path', cargo_path, cwd=example)
             crate = next(item for item in record['packages'] if item['kind'] == 'cargo')
-            locked = re.search(r'name = "tauri-plugin-jelto"\nversion = "([^"]+)"\nsource = "([^"]+)"\nchecksum = "([a-f0-9]{64})"',
-                               (example / 'src-tauri/Cargo.lock').read_text())
-            if not locked or locked.group(1) != value or 'crates.io' not in locked.group(2) or locked.group(3) != crate['sha256']:
-                raise ValueError('The native example did not resolve the published crate: ' + repr(locked and locked.groups()))
+            locked = re.search(
+                r'name = "tauri-plugin-jelto"\nversion = "([^"]+)"\nsource = "([^"]+)"\nchecksum = "([a-f0-9]{64})"',
+                (example / 'src-tauri/Cargo.lock').read_text(),
+            )
+            if (
+                not locked
+                or locked.group(1) != value
+                or 'crates.io' not in locked.group(2)
+                or locked.group(3) != crate['sha256']
+            ):
+                raise ValueError(
+                    'The native example did not resolve the published crate: ' + repr(locked and locked.groups())
+                )
             run('npm', 'ci', cwd=example, env=env)
             run('npm', 'run', 'tauri', 'build', '--', '--no-bundle', cwd=example, env=env)
         print('PASS isolated ' + component + (' registry' if registry else ' package') + ' consumer')
@@ -745,8 +896,23 @@ def smoke(root, registry=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['validate', 'contracts', 'stage', 'verify', 'status', 'wait', 'draft', 'github',
-                                            'previous', 'doctor', 'configure', 'smoke'])
+    parser.add_argument(
+        'command',
+        choices=[
+            'validate',
+            'contracts',
+            'stage',
+            'verify',
+            'status',
+            'wait',
+            'draft',
+            'github',
+            'previous',
+            'doctor',
+            'configure',
+            'smoke',
+        ],
+    )
     parser.add_argument('--tag', default=os.environ.get('GITHUB_REF_NAME', ''))
     parser.add_argument('--repository', default=os.environ.get('GITHUB_REPOSITORY', ''))
     parser.add_argument('--contracts-url')
@@ -767,8 +933,14 @@ def main():
     elif args.command in {'status', 'wait'}:
         registry_status(root, args.tag, args.repository, args.command == 'wait', args.kind)
     else:
-        {'validate': validate, 'stage': stage, 'verify': verify, 'draft': github_draft, 'github': github_release,
-         'previous': previous}[args.command](root, args.tag, args.repository)
+        {
+            'validate': validate,
+            'stage': stage,
+            'verify': verify,
+            'draft': github_draft,
+            'github': github_release,
+            'previous': previous,
+        }[args.command](root, args.tag, args.repository)
 
 
 if __name__ == '__main__':

@@ -18,6 +18,7 @@ machine, so a consumer's pin and a rebuild can be compared. This file is
 consumed by each producer as a versioned component-local input and by the
 backend's workspace packaging, so the two cannot drift.
 """
+
 import argparse
 import gzip
 import hashlib
@@ -35,8 +36,10 @@ CONFIG = 'component-package.json'
 ARTIFACT_TYPE = 'application/vnd.jelto.component-package.v1+json'
 IMAGE_SPECS = ['v1.1', 'v1.0']
 COMPONENT = re.compile(r'[a-z][a-z0-9-]*')
-SEMVER = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
-                    r'(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?')
+SEMVER = re.compile(
+    r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
+    r'(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?'
+)
 COMMIT = re.compile(r'[0-9a-f]{40}')
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}')
 
@@ -69,8 +72,7 @@ def load_config(root):
     component, include = config.get('component'), config.get('include')
     if not isinstance(component, str) or not COMPONENT.fullmatch(component):
         raise PackageError(f'{CONFIG}: component must be a lowercase name, not {component!r}')
-    if not isinstance(include, list) or not include \
-            or not all(isinstance(entry, str) and entry for entry in include):
+    if not isinstance(include, list) or not include or not all(isinstance(entry, str) and entry for entry in include):
         raise PackageError(f'{CONFIG}: include must be a non-empty list of paths')
     return component, include
 
@@ -129,9 +131,12 @@ def write_archive(files, archive):
         info.mtime, info.uid, info.gid, info.mode = 0, 0, 0, 0o644
         info.uname = info.gname = ''
         return info
-    with open(archive, 'wb') as raw, \
-            gzip.GzipFile(filename='', mode='wb', fileobj=raw, mtime=0) as stream, \
-            tarfile.open(fileobj=stream, mode='w', format=tarfile.GNU_FORMAT) as tar:
+
+    with (
+        open(archive, 'wb') as raw,
+        gzip.GzipFile(filename='', mode='wb', fileobj=raw, mtime=0) as stream,
+        tarfile.open(fileobj=stream, mode='w', format=tarfile.GNU_FORMAT) as tar,
+    ):
         for name in sorted(files):
             tar.add(files[name], arcname=name, recursive=False, filter=normalise)
 
@@ -166,6 +171,7 @@ def build(root, out, repository=None, commit=None, published=False):
 
 
 # ---------------------------------------------------------------- registry
+
 
 def oras(run, *args, cwd=None):
     if shutil.which('oras') is None:
@@ -234,9 +240,11 @@ def check(root, out, registry, repository=None, commit=None, run=subprocess.run)
     if found is None:
         return {'component': component, 'version': version, 'state': 'unpublished'}
     if same_content(name, found, manifest, archive, run) is None:
-        raise PackageError(f'{name}:{version} is already published with different content; a published '
-                           f'version is immutable, so bump the version before merging, for example '
-                           f'`npm version patch --no-git-tag-version`, and commit it as chore(package)')
+        raise PackageError(
+            f'{name}:{version} is already published with different content; a published '
+            f'version is immutable, so bump the version before merging, for example '
+            f'`npm version patch --no-git-tag-version`, and commit it as chore(package)'
+        )
     return {'component': component, 'version': version, 'state': 'identical'}
 
 
@@ -252,14 +260,17 @@ def publish(root, out, registry, repository=None, commit=None, image_spec='v1.1'
     existing = {tag: resolve(name, tag, run) for tag in tags}
     digests = {found for found in existing.values() if found}
     if len(digests) > 1:
-        raise PackageError(f'{name}: {version} and sha-{manifest["source_commit"][:7]} name different '
-                           f'artifacts; resolve that by hand')
+        raise PackageError(
+            f'{name}: {version} and sha-{manifest["source_commit"][:7]} name different artifacts; resolve that by hand'
+        )
     if digests:
         found = digests.pop()
         published = same_content(name, found, manifest, archive, run)
         if published is None:
-            raise PackageError(f'{name}:{version} already holds a different package; a published version '
-                               f'is immutable, so ship changed content under a new version')
+            raise PackageError(
+                f'{name}:{version} already holds a different package; a published version '
+                f'is immutable, so ship changed content under a new version'
+            )
         if published['source_commit'] == manifest['source_commit']:
             # The same build from the same commit: complete its tags if one is missing.
             for tag, present in existing.items():
@@ -271,25 +282,41 @@ def publish(root, out, registry, repository=None, commit=None, image_spec='v1.1'
         (out / f'{component}.json').write_text(json.dumps(manifest, indent=2) + '\n')
         reused = True
     else:
-        oras(run, 'push', f'{name}:{",".join(tags)}',
-             '--image-spec', image_spec,
-             '--artifact-type', ARTIFACT_TYPE,
-             '--annotation', f'org.opencontainers.image.source=https://github.com/{manifest["repository"]}',
-             '--annotation', f'org.opencontainers.image.revision={manifest["source_commit"]}',
-             '--annotation', f'org.opencontainers.image.version={version}',
-             f'{archive.name}:application/gzip', f'{component}.json:application/json',
-             cwd=out)
+        oras(
+            run,
+            'push',
+            f'{name}:{",".join(tags)}',
+            '--image-spec',
+            image_spec,
+            '--artifact-type',
+            ARTIFACT_TYPE,
+            '--annotation',
+            f'org.opencontainers.image.source=https://github.com/{manifest["repository"]}',
+            '--annotation',
+            f'org.opencontainers.image.revision={manifest["source_commit"]}',
+            '--annotation',
+            f'org.opencontainers.image.version={version}',
+            f'{archive.name}:application/gzip',
+            f'{component}.json:application/json',
+            cwd=out,
+        )
         found = resolve(name, version, run)
         if found is None:
             raise PackageError(f'pushed {name}:{version} but it does not resolve')
         reused = False
-    return {'component': component, 'version': version, 'commit': manifest['source_commit'],
-            'name': name, 'digest': found, 'ref': f'{name}@{found}', 'reused': reused}
+    return {
+        'component': component,
+        'version': version,
+        'commit': manifest['source_commit'],
+        'name': name,
+        'digest': found,
+        'ref': f'{name}@{found}',
+        'reused': reused,
+    }
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--root', default='.', help='the component checkout (default: current directory)')
     parser.add_argument('--out', default='dist-package', help='where the pair is written')
     parser.add_argument('--repository', help='OWNER/NAME of the producer (default: GITHUB_REPOSITORY)')
@@ -306,8 +333,10 @@ def main():
     try:
         if args.command == 'build':
             manifest, archive = build(root, out, args.repository, args.commit)
-            print(f'  built {manifest["component"]:<12} v{manifest["version"]:<8} '
-                  f'{len(manifest["files"]):>4} files  {manifest["archive_sha256"][:16]}…  {archive}')
+            print(
+                f'  built {manifest["component"]:<12} v{manifest["version"]:<8} '
+                f'{len(manifest["files"]):>4} files  {manifest["archive_sha256"][:16]}…  {archive}'
+            )
             return
         registry = args.registry
         if not registry:
@@ -317,19 +346,27 @@ def main():
             registry = f'ghcr.io/{owner.lower()}'
         if args.command == 'check':
             state = check(root, out, registry, args.repository, args.commit)
-            print(f'  {state["component"]} v{state["version"]} is {state["state"]}: '
-                  + ('a push to main publishes it' if state['state'] == 'unpublished'
-                     else 'the registry already holds these bytes'))
+            print(
+                f'  {state["component"]} v{state["version"]} is {state["state"]}: '
+                + (
+                    'a push to main publishes it'
+                    if state['state'] == 'unpublished'
+                    else 'the registry already holds these bytes'
+                )
+            )
             return
         done = publish(root, out, registry, args.repository, args.commit, args.image_spec)
     except PackageError as error:
         sys.exit(f'FATAL: {error}')
-    print(f'  {"reused" if done["reused"] else "published"} {done["component"]:<12} '
-          f'v{done["version"]:<8} {done["ref"]}')
+    print(
+        f'  {"reused" if done["reused"] else "published"} {done["component"]:<12} v{done["version"]:<8} {done["ref"]}'
+    )
     output = os.environ.get('GITHUB_OUTPUT')
     if output:
         with open(output, 'a') as handle:
-            handle.writelines(f'{key}={done[key]}\n' for key in ('component', 'version', 'commit', 'name', 'digest', 'ref'))
+            handle.writelines(
+                f'{key}={done[key]}\n' for key in ('component', 'version', 'commit', 'name', 'digest', 'ref')
+            )
             handle.write(f'reused={"true" if done["reused"] else "false"}\n')
 
 

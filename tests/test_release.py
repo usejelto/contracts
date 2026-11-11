@@ -32,11 +32,19 @@ def unsafe_zip(name, body=b'unsafe'):
 
 
 def npm_archive(value='1.2.3', body=b'export const ready = true'):
-    files = {'package/package.json': json.dumps({
-        'name': '@jelto/analytics', 'version': value, 'license': 'MIT',
-        'exports': {'.': './dist/browser.js', './server': './dist/server.js'},
-    }).encode(), 'package/LICENSE': b'MIT', 'package/dist/browser.js': body,
-        'package/dist/server.js': b'export const server = true'}
+    files = {
+        'package/package.json': json.dumps(
+            {
+                'name': '@jelto/analytics',
+                'version': value,
+                'license': 'MIT',
+                'exports': {'.': './dist/browser.js', './server': './dist/server.js'},
+            }
+        ).encode(),
+        'package/LICENSE': b'MIT',
+        'package/dist/browser.js': body,
+        'package/dist/server.js': b'export const server = true',
+    }
     data = io.BytesIO()
     with tarfile.open(fileobj=data, mode='w:gz') as archive:
         for name, content in files.items():
@@ -58,11 +66,16 @@ class ReleaseTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.repo = 'example/jelto-analytics'
         (self.root / 'release.json').write_text(json.dumps({'component': 'analytics', 'repository': self.repo}))
-        self.package = {'name': '@jelto/analytics', 'version': '1.2.3', 'license': 'MIT',
-                        'repository': {'url': 'git+https://github.com/' + self.repo + '.git'}}
+        self.package = {
+            'name': '@jelto/analytics',
+            'version': '1.2.3',
+            'license': 'MIT',
+            'repository': {'url': 'git+https://github.com/' + self.repo + '.git'},
+        }
         (self.root / 'package.json').write_text(json.dumps(self.package))
-        (self.root / 'package-lock.json').write_text(json.dumps({
-            'version': '1.2.3', 'packages': {'': {'version': '1.2.3'}}}))
+        (self.root / 'package-lock.json').write_text(
+            json.dumps({'version': '1.2.3', 'packages': {'': {'version': '1.2.3'}}})
+        )
         (self.root / 'LICENSE').write_text('MIT')
 
     def git(self, *args):
@@ -135,8 +148,10 @@ class ReleaseTests(unittest.TestCase):
             self.assertFalse(release.registry_matches(folder, item, '1.2.3'))
         with patch.object(release, 'registry_data', return_value=data):
             self.assertTrue(release.registry_matches(folder, item, '1.2.3'))
-        with patch.object(release, 'registry_data', return_value=npm_archive(body=b'collision')), \
-                self.assertRaisesRegex(ValueError, 'different contents'):
+        with (
+            patch.object(release, 'registry_data', return_value=npm_archive(body=b'collision')),
+            self.assertRaisesRegex(ValueError, 'different contents'),
+        ):
             release.registry_matches(folder, item, '1.2.3')
 
     def test_nuget_comparison_excludes_only_signature(self):
@@ -147,10 +162,14 @@ class ReleaseTests(unittest.TestCase):
                 if signature:
                     archive.writestr('.signature.p7s', signature)
             return data.getvalue()
-        self.assertEqual(release.archive_files(package(None), 'nuget'),
-                         release.archive_files(package(b'registry'), 'nuget'))
-        self.assertNotEqual(release.archive_files(package(None), 'nuget'),
-                            release.archive_files(package(b'registry', b'changed'), 'nuget'))
+
+        self.assertEqual(
+            release.archive_files(package(None), 'nuget'), release.archive_files(package(b'registry'), 'nuget')
+        )
+        self.assertNotEqual(
+            release.archive_files(package(None), 'nuget'),
+            release.archive_files(package(b'registry', b'changed'), 'nuget'),
+        )
 
     def test_unsafe_archives_fail(self):
         for name in ['../escape', '/absolute', 'C:/file', 'folder\\file']:
@@ -200,8 +219,11 @@ class ReleaseTests(unittest.TestCase):
     def test_transport_errors_are_not_missing_versions(self):
         error = urllib.error.HTTPError('https://example.com', 403, 'forbidden', {}, None)
         self.addCleanup(error.close)
-        with patch('urllib.request.OpenerDirector.open', side_effect=error) as opened, \
-                patch('release.time.sleep') as slept, self.assertRaises(urllib.error.HTTPError):
+        with (
+            patch('urllib.request.OpenerDirector.open', side_effect=error) as opened,
+            patch('release.time.sleep') as slept,
+            self.assertRaises(urllib.error.HTTPError),
+        ):
             release.download('https://example.com', missing=True)
         # A definite client-side answer is final: no retry, no pause.
         self.assertEqual(opened.call_count, 1)
@@ -218,23 +240,32 @@ class ReleaseTests(unittest.TestCase):
         reset = urllib.error.URLError(ConnectionResetError(104, 'Connection reset by peer'))
         unavailable = urllib.error.HTTPError('https://example.com', 503, 'unavailable', {}, None)
         self.addCleanup(unavailable.close)
-        with patch('urllib.request.OpenerDirector.open', side_effect=[reset, unavailable, Response(b'archive')]) as opened, \
-                patch('release.time.sleep') as slept:
+        with (
+            patch(
+                'urllib.request.OpenerDirector.open', side_effect=[reset, unavailable, Response(b'archive')]
+            ) as opened,
+            patch('release.time.sleep') as slept,
+        ):
             self.assertEqual(release.download('https://example.com/file'), b'archive')
         self.assertEqual(opened.call_count, 3)
-        self.assertEqual([call.args[0] for call in slept.call_args_list],
-                         [release.DOWNLOAD_PAUSE, release.DOWNLOAD_PAUSE * 2])
-        with patch('urllib.request.OpenerDirector.open', side_effect=[reset] * release.DOWNLOAD_ATTEMPTS) as opened, \
-                patch('release.time.sleep') as slept, \
-                self.assertRaisesRegex(RuntimeError, 'Download failed after 5 attempts'):
+        self.assertEqual(
+            [call.args[0] for call in slept.call_args_list], [release.DOWNLOAD_PAUSE, release.DOWNLOAD_PAUSE * 2]
+        )
+        with (
+            patch('urllib.request.OpenerDirector.open', side_effect=[reset] * release.DOWNLOAD_ATTEMPTS) as opened,
+            patch('release.time.sleep') as slept,
+            self.assertRaisesRegex(RuntimeError, 'Download failed after 5 attempts'),
+        ):
             release.download('https://example.com/file')
         self.assertEqual(opened.call_count, 5)
         # A doubling pause outlasts the gateway timeouts a release asset has answered with.
         self.assertEqual([call.args[0] for call in slept.call_args_list], [2.0, 4.0, 8.0, 16.0])
         missing = urllib.error.HTTPError('https://example.com', 404, 'missing', {}, None)
         self.addCleanup(missing.close)
-        with patch('urllib.request.OpenerDirector.open', side_effect=missing) as opened, \
-                patch('release.time.sleep') as slept:
+        with (
+            patch('urllib.request.OpenerDirector.open', side_effect=missing) as opened,
+            patch('release.time.sleep') as slept,
+        ):
             self.assertIsNone(release.download('https://example.com/file', missing=True))
         self.assertEqual(opened.call_count, 1)
         slept.assert_not_called()
@@ -249,39 +280,52 @@ class ReleaseTests(unittest.TestCase):
             release.verify(self.root, 'v1.2.3', self.repo)
 
     def test_wait_can_select_only_rust_for_partial_tauri_release(self):
-        record = {'version': '1.0.0', 'packages': [
-            {'kind': 'cargo', 'name': 'tauri-plugin-jelto'}, {'kind': 'npm', 'name': '@jelto/tauri'}]}
-        with patch.object(release, 'verify', return_value=record), patch.object(release, 'registry_matches', return_value=True) as matches:
+        record = {
+            'version': '1.0.0',
+            'packages': [{'kind': 'cargo', 'name': 'tauri-plugin-jelto'}, {'kind': 'npm', 'name': '@jelto/tauri'}],
+        }
+        with (
+            patch.object(release, 'verify', return_value=record),
+            patch.object(release, 'registry_matches', return_value=True) as matches,
+        ):
             release.registry_status(self.root, 'v1.0.0', self.repo, wait=True, kind='cargo')
             self.assertEqual(matches.call_count, 1)
             self.assertEqual(matches.call_args.args[1]['kind'], 'cargo')
 
     def test_wait_awaits_the_install_index_after_the_bytes(self):
         record = {'version': '1.0.1', 'packages': [{'kind': 'npm', 'name': '@jelto/crawler'}]}
-        with patch.object(release, 'verify', return_value=record), \
-                patch.object(release, 'registry_matches', return_value=True), \
-                patch.object(release, 'registry_indexed', side_effect=[False, False, True]) as indexed, \
-                patch.object(release.time, 'sleep') as sleep:
+        with (
+            patch.object(release, 'verify', return_value=record),
+            patch.object(release, 'registry_matches', return_value=True),
+            patch.object(release, 'registry_indexed', side_effect=[False, False, True]) as indexed,
+            patch.object(release.time, 'sleep') as sleep,
+        ):
             release.registry_status(self.root, 'v1.0.1', self.repo, wait=True)
             self.assertEqual(indexed.call_count, 3)
             self.assertEqual(sleep.call_count, 2)
-        with patch.object(release, 'verify', return_value=record), \
-                patch.object(release, 'registry_matches', return_value=True), \
-                patch.object(release, 'registry_indexed', return_value=False), \
-                patch.object(release.time, 'sleep'), self.assertRaisesRegex(ValueError, 'indexing timed out'):
+        with (
+            patch.object(release, 'verify', return_value=record),
+            patch.object(release, 'registry_matches', return_value=True),
+            patch.object(release, 'registry_indexed', return_value=False),
+            patch.object(release.time, 'sleep'),
+            self.assertRaisesRegex(ValueError, 'indexing timed out'),
+        ):
             release.registry_status(self.root, 'v1.0.1', self.repo, wait=True)
         # status answers about the bytes alone: a published, not yet indexed version exists.
-        with patch.object(release, 'verify', return_value=record), \
-                patch.object(release, 'registry_matches', return_value=True), \
-                patch.object(release, 'registry_indexed') as indexed:
+        with (
+            patch.object(release, 'verify', return_value=record),
+            patch.object(release, 'registry_matches', return_value=True),
+            patch.object(release, 'registry_indexed') as indexed,
+        ):
             release.registry_status(self.root, 'v1.0.1', self.repo, wait=False)
             indexed.assert_not_called()
 
     def test_registry_indexed_reads_what_each_installer_resolves(self):
         bodies = {
-            'https://registry.npmjs.org/%40jelto%2Fcrawler': json.dumps({'versions': {'1.0.0': {}, '1.0.1': {}}}).encode(),
-            'https://index.crates.io/ta/ur/tauri-plugin-jelto':
-                b'{"name":"tauri-plugin-jelto","vers":"1.0.0"}\n{"name":"tauri-plugin-jelto","vers":"1.0.1"}\n',
+            'https://registry.npmjs.org/%40jelto%2Fcrawler': json.dumps(
+                {'versions': {'1.0.0': {}, '1.0.1': {}}}
+            ).encode(),
+            'https://index.crates.io/ta/ur/tauri-plugin-jelto': b'{"name":"tauri-plugin-jelto","vers":"1.0.0"}\n{"name":"tauri-plugin-jelto","vers":"1.0.1"}\n',
             'https://api.nuget.org/v3-flatcontainer/jelto/index.json': json.dumps({'versions': ['0.1.0']}).encode(),
         }
         calls = []
@@ -306,10 +350,12 @@ class ReleaseTests(unittest.TestCase):
         self.assertGreaterEqual(sum(release.WAIT_PAUSES), 840)
         self.assertEqual(release.WAIT_PAUSES, sorted(release.WAIT_PAUSES))
         record = {'version': '1.0.2', 'packages': [{'kind': 'npm', 'name': '@jelto/tauri'}]}
-        with patch.object(release, 'verify', return_value=record), \
-                patch.object(release, 'registry_matches', return_value=True), \
-                patch.object(release, 'registry_indexed', return_value=False), \
-                patch.object(release.time, 'sleep') as sleep:
+        with (
+            patch.object(release, 'verify', return_value=record),
+            patch.object(release, 'registry_matches', return_value=True),
+            patch.object(release, 'registry_indexed', return_value=False),
+            patch.object(release.time, 'sleep') as sleep,
+        ):
             with self.assertRaisesRegex(ValueError, 'indexing timed out'):
                 release.registry_status(self.root, 'v1.0.2', self.repo, wait=True)
             self.assertEqual([call.args[0] for call in sleep.call_args_list], release.WAIT_PAUSES)
@@ -317,60 +363,111 @@ class ReleaseTests(unittest.TestCase):
     def test_draft_opens_once_and_names_the_manual_command_on_403(self):
         self.prepare()
         created = subprocess.CompletedProcess([], 0, stdout='https://github.com/x/y/releases/tag/untagged', stderr='')
-        with patch.object(release, 'find_release', side_effect=[None, {'tag_name': 'v1.2.3', 'draft': True,
-                                                                        'target_commitish': 'main'}]), \
-                patch.object(release, 'invoke', return_value=created) as run:
+        with (
+            patch.object(
+                release,
+                'find_release',
+                side_effect=[None, {'tag_name': 'v1.2.3', 'draft': True, 'target_commitish': 'main'}],
+            ),
+            patch.object(release, 'invoke', return_value=created) as run,
+        ):
             self.assertTrue(release.github_draft(self.root, 'v1.2.3', self.repo)['draft'])
             self.assertEqual(run.call_args.args[:4], ('gh', 'release', 'create', 'v1.2.3'))
             self.assertIn('--draft', run.call_args.args)
         head = self.git('rev-parse', 'HEAD')
-        with patch.object(release, 'find_release', return_value={'tag_name': 'v1.2.3', 'draft': True, 'target_commitish': head}), \
-                patch.object(release, 'invoke') as run:
+        with (
+            patch.object(
+                release, 'find_release', return_value={'tag_name': 'v1.2.3', 'draft': True, 'target_commitish': head}
+            ),
+            patch.object(release, 'invoke') as run,
+        ):
             release.github_draft(self.root, 'v1.2.3', self.repo)
             run.assert_not_called()
-        with patch.object(release, 'find_release', return_value={'tag_name': 'v1.2.3', 'draft': False, 'target_commitish': 'other'}), \
-                self.assertRaisesRegex(ValueError, 'source differs'):
+        with (
+            patch.object(
+                release,
+                'find_release',
+                return_value={'tag_name': 'v1.2.3', 'draft': False, 'target_commitish': 'other'},
+            ),
+            self.assertRaisesRegex(ValueError, 'source differs'),
+        ):
             release.github_draft(self.root, 'v1.2.3', self.repo)
-        refused = subprocess.CompletedProcess([], 1, stdout='', stderr='HTTP 403: Resource not accessible by integration')
-        with patch.object(release, 'find_release', return_value=None), \
-                patch.object(release, 'invoke', return_value=refused):
-            with self.assertRaisesRegex(ValueError, 'gh api -X POST repos/' + self.repo + '/releases -f tag_name=v1.2.3') as refusal:
+        refused = subprocess.CompletedProcess(
+            [], 1, stdout='', stderr='HTTP 403: Resource not accessible by integration'
+        )
+        with (
+            patch.object(release, 'find_release', return_value=None),
+            patch.object(release, 'invoke', return_value=refused),
+        ):
+            with self.assertRaisesRegex(
+                ValueError, 'gh api -X POST repos/' + self.repo + '/releases -f tag_name=v1.2.3'
+            ) as refusal:
                 release.github_draft(self.root, 'v1.2.3', self.repo)
             self.assertIn('target_commitish=' + head, str(refusal.exception))
 
     def test_previous_run_needs_passing_checks_and_live_artifacts(self):
         answers = {
-            'repos/x/y/actions/workflows/release.yml/runs?head_sha=abc&per_page=50': {'workflow_runs': [
-                {'id': 1, 'run_number': 1, 'status': 'completed'},
-                {'id': 2, 'run_number': 2, 'status': 'completed'},
-                {'id': 3, 'run_number': 3, 'status': 'completed'},
-                {'id': 4, 'run_number': 4, 'status': 'in_progress'},
-                {'id': 5, 'run_number': 5, 'status': 'completed'}]},
+            'repos/x/y/actions/workflows/release.yml/runs?head_sha=abc&per_page=50': {
+                'workflow_runs': [
+                    {'id': 1, 'run_number': 1, 'status': 'completed'},
+                    {'id': 2, 'run_number': 2, 'status': 'completed'},
+                    {'id': 3, 'run_number': 3, 'status': 'completed'},
+                    {'id': 4, 'run_number': 4, 'status': 'in_progress'},
+                    {'id': 5, 'run_number': 5, 'status': 'completed'},
+                ]
+            },
             'repos/x/y/actions/runs/5/jobs?per_page=100': {'jobs': [{'name': 'validate', 'conclusion': 'success'}]},
-            'repos/x/y/actions/runs/3/jobs?per_page=100': {'jobs': [
-                {'name': 'checks / checks (ubuntu-24.04)', 'conclusion': 'success'},
-                {'name': 'checks / checks (windows-latest)', 'conclusion': 'failure'}]},
-            'repos/x/y/actions/runs/2/jobs?per_page=100': {'jobs': [
-                {'name': 'checks / checks (ubuntu-24.04)', 'conclusion': 'success'}, {'name': 'publish', 'conclusion': 'failure'}]},
-            'repos/x/y/actions/runs/2/artifacts?per_page=100': {'artifacts': [{'name': 'release-Linux', 'expired': True}]},
-            'repos/x/y/actions/runs/1/jobs?per_page=100': {'jobs': [
-                {'name': 'checks / checks (ubuntu-24.04)', 'conclusion': 'success'}, {'name': 'publish', 'conclusion': 'failure'}]},
-            'repos/x/y/actions/runs/1/artifacts?per_page=100': {'artifacts': [{'name': 'release-Linux', 'expired': False}]},
+            'repos/x/y/actions/runs/3/jobs?per_page=100': {
+                'jobs': [
+                    {'name': 'checks / checks (ubuntu-24.04)', 'conclusion': 'success'},
+                    {'name': 'checks / checks (windows-latest)', 'conclusion': 'failure'},
+                ]
+            },
+            'repos/x/y/actions/runs/2/jobs?per_page=100': {
+                'jobs': [
+                    {'name': 'checks / checks (ubuntu-24.04)', 'conclusion': 'success'},
+                    {'name': 'publish', 'conclusion': 'failure'},
+                ]
+            },
+            'repos/x/y/actions/runs/2/artifacts?per_page=100': {
+                'artifacts': [{'name': 'release-Linux', 'expired': True}]
+            },
+            'repos/x/y/actions/runs/1/jobs?per_page=100': {
+                'jobs': [
+                    {'name': 'checks / checks (ubuntu-24.04)', 'conclusion': 'success'},
+                    {'name': 'publish', 'conclusion': 'failure'},
+                ]
+            },
+            'repos/x/y/actions/runs/1/artifacts?per_page=100': {
+                'artifacts': [{'name': 'release-Linux', 'expired': False}]
+            },
         }
         with patch.object(release, 'gh_json', side_effect=lambda path: answers[path]):
             # 5 has no checks, 4 is running, 3 failed a platform, 2's artifacts expired: 1 is the one.
             self.assertEqual(release.previous_run('x/y', 'abc', 'release.yml', current=6), 1)
             # The current run never reuses itself.
-            self.assertIsNone(release.previous_run('x/y', 'abc', 'release.yml', current=1)
-                              if False else release.previous_run('x/y', 'abc', 'release.yml', current='1'))
+            self.assertIsNone(
+                release.previous_run('x/y', 'abc', 'release.yml', current=1)
+                if False
+                else release.previous_run('x/y', 'abc', 'release.yml', current='1')
+            )
 
     def test_trust_evidence_reads_provenance_from_each_registry(self):
         bodies = {
-            'https://registry.npmjs.org/%40jelto%2Fanalytics': json.dumps({'versions': {
-                '1.0.0': {'dist': {}}, '1.0.1': {'dist': {'attestations': {'url': 'x'}}}}}).encode(),
-            'https://registry.npmjs.org/%40jelto%2Felectron': json.dumps({'versions': {'1.0.0': {'dist': {}}}}).encode(),
-            'https://crates.io/api/v1/crates/tauri-plugin-jelto/versions': json.dumps({'versions': [
-                {'num': '1.0.0', 'trustpub_data': None}, {'num': '1.0.1', 'trustpub_data': {'provider': 'github'}}]}).encode(),
+            'https://registry.npmjs.org/%40jelto%2Fanalytics': json.dumps(
+                {'versions': {'1.0.0': {'dist': {}}, '1.0.1': {'dist': {'attestations': {'url': 'x'}}}}}
+            ).encode(),
+            'https://registry.npmjs.org/%40jelto%2Felectron': json.dumps(
+                {'versions': {'1.0.0': {'dist': {}}}}
+            ).encode(),
+            'https://crates.io/api/v1/crates/tauri-plugin-jelto/versions': json.dumps(
+                {
+                    'versions': [
+                        {'num': '1.0.0', 'trustpub_data': None},
+                        {'num': '1.0.1', 'trustpub_data': {'provider': 'github'}},
+                    ]
+                }
+            ).encode(),
         }
         with patch.object(release, 'download', side_effect=lambda url, missing=False, accept=None: bodies.get(url)):
             self.assertEqual(release.trust_evidence('npm', '@jelto/analytics')[0], 'ok')
@@ -384,7 +481,10 @@ class ReleaseTests(unittest.TestCase):
 
     def test_completed_release_requires_all_registries(self):
         self.prepare()
-        with patch.object(release, 'registry_data', return_value=None), self.assertRaisesRegex(ValueError, 'not available'):
+        with (
+            patch.object(release, 'registry_data', return_value=None),
+            self.assertRaisesRegex(ValueError, 'not available'),
+        ):
             release.github_release(self.root, 'v1.2.3', self.repo)
 
     def test_missing_exports_fail_package_check(self):

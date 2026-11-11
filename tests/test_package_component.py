@@ -28,9 +28,9 @@ def producer(root, component='docs', version='1.0.0', include=None):
     (root / 'server.go').write_bytes(b'package docs')
     (root / 'server_test.go').write_bytes(b'package docs')
     (root / 'package.json').write_text(json.dumps({'name': '@jelto/docs', 'version': version}))
-    (root / tool.CONFIG).write_text(json.dumps({
-        'component': component,
-        'include': include or ['dist', 'content', 'go.mod', '*.go']}))
+    (root / tool.CONFIG).write_text(
+        json.dumps({'component': component, 'include': include or ['dist', 'content', 'go.mod', '*.go']})
+    )
     return root
 
 
@@ -53,8 +53,14 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(first['repository'], 'usejelto/docs')
         self.assertFalse(first['published'])
         self.assertEqual(first['archive_sha256'], hashlib.sha256(archive.read_bytes()).hexdigest())
-        expected = {'dist/index.html', 'dist/assets/app.js', 'content/guides/start.md',
-                    'go.mod', 'server.go', 'server_test.go'}
+        expected = {
+            'dist/index.html',
+            'dist/assets/app.js',
+            'content/guides/start.md',
+            'go.mod',
+            'server.go',
+            'server_test.go',
+        }
         self.assertEqual(set(first['files']), expected)
         self.assertEqual(first['files']['dist/index.html'], hashlib.sha256(b'<html>').hexdigest())
         with tarfile.open(archive) as tar:
@@ -122,8 +128,9 @@ class FakeRegistry:
         verb, rest = command[1], command[2:]
         if verb == 'resolve':
             found = self.tags.get(rest[0])
-            return subprocess.CompletedProcess(command, 0 if found else 1, found or '',
-                                               '' if found else f'Error: {rest[0]}: not found')
+            return subprocess.CompletedProcess(
+                command, 0 if found else 1, found or '', '' if found else f'Error: {rest[0]}: not found'
+            )
         if verb == 'pull':
             files = self.artifacts.get(rest[0].split('@', 1)[1])
             if files is None:
@@ -133,9 +140,11 @@ class FakeRegistry:
             return subprocess.CompletedProcess(command, 0, '', '')
         if verb == 'push':
             name, tags = rest[0].split(':', 1)
-            files = {item.split(':')[0]: (Path(cwd) / item.split(':')[0]).read_bytes()
-                     for item in rest if ':' in item and not item.startswith('--')
-                     and (Path(cwd) / item.split(':')[0]).is_file()}
+            files = {
+                item.split(':')[0]: (Path(cwd) / item.split(':')[0]).read_bytes()
+                for item in rest
+                if ':' in item and not item.startswith('--') and (Path(cwd) / item.split(':')[0]).is_file()
+            }
             digest = 'sha256:' + hashlib.sha256(b''.join(sorted(files.values()))).hexdigest()
             self.artifacts[digest] = files
             for tag in tags.split(','):
@@ -226,6 +235,7 @@ class PublishTests(unittest.TestCase):
             if command[1] == 'resolve':
                 return subprocess.CompletedProcess(command, 1, '', 'Error: unauthorized: authentication required')
             return self.registry.run(command, **kwargs)
+
         with self.assertRaisesRegex(tool.PackageError, 'unauthorized'):
             self.publish(run=run)
         self.assertEqual(self.registry.pushes, [])

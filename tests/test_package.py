@@ -27,11 +27,17 @@ class ContractsPackageTests(unittest.TestCase):
                     self.assertFalse(name.startswith(('internal/', 'sdk/', 'docs/', 'web/')), name)
                 self.assertIn('spec/conformance/runner/main.go', manifest['files'])
                 self.assertIn('spec/wire-v1.schema.json', manifest['files'])
-                for name in ('LICENSE', 'CONTRIBUTING.md', 'CODE_OF_CONDUCT.md',
-                             'SECURITY.md', 'SUPPORT.md', '.github/PULL_REQUEST_TEMPLATE.md',
-                             '.github/ISSUE_TEMPLATE/bug_report.yml',
-                             '.github/ISSUE_TEMPLATE/feature_request.yml',
-                             '.github/ISSUE_TEMPLATE/config.yml'):
+                for name in (
+                    'LICENSE',
+                    'CONTRIBUTING.md',
+                    'CODE_OF_CONDUCT.md',
+                    'SECURITY.md',
+                    'SUPPORT.md',
+                    '.github/PULL_REQUEST_TEMPLATE.md',
+                    '.github/ISSUE_TEMPLATE/bug_report.yml',
+                    '.github/ISSUE_TEMPLATE/feature_request.yml',
+                    '.github/ISSUE_TEMPLATE/config.yml',
+                ):
                     self.assertEqual(archive.read(name), (root / name).read_bytes())
                 self.assertNotIn('internal/', archive.namelist())
                 self.assertNotIn('replace ', archive.read('go.mod').decode())
@@ -39,8 +45,12 @@ class ContractsPackageTests(unittest.TestCase):
                 archive.extractall(isolated)
             # A release must carry its own packager and every declared input.
             # Repacking from an unrelated working directory must be identical.
-            subprocess.run([sys.executable, str(isolated / 'package.py'), '--output',
-                            str(Path(temp) / 'repacked')], cwd=temp, check=True, capture_output=True)
+            subprocess.run(
+                [sys.executable, str(isolated / 'package.py'), '--output', str(Path(temp) / 'repacked')],
+                cwd=temp,
+                check=True,
+                capture_output=True,
+            )
             repacked = Path(temp) / 'repacked' / first.name
             self.assertEqual(first.read_bytes(), repacked.read_bytes())
 
