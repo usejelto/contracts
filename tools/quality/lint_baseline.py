@@ -95,7 +95,9 @@ def check(found, where, baseline):
     if new or gone:
         if gone:
             print(
-                'lint_baseline: remove the fixed entries with `make lint-baseline` and review the diff', file=sys.stderr
+                'lint_baseline: remove the fixed entries by rewriting the baseline '
+                '(make lint-baseline for golangci-lint, make knip-baseline for Knip) and review the diff',
+                file=sys.stderr,
             )
         print(
             f'lint_baseline: {sum(new.values())} new, {sum(gone.values())} fixed but listed, {kept} known',
