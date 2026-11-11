@@ -2,6 +2,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 import subprocess
 import tarfile
 import tempfile
@@ -71,7 +72,10 @@ class InstallTest(unittest.TestCase):
         with mock.patch.object(install_tools, 'download', return_value=payload):
             path = install_tools.install('demo', self.tools(payload))
         self.assertEqual(path.read_bytes(), b'#!/bin/sh\necho demo\n')
-        self.assertTrue(path.stat().st_mode & 0o100)
+        # Windows has no executable bit; no pinned asset targets it, but the
+        # contracts tests run there too.
+        if os.name != 'nt':
+            self.assertTrue(path.stat().st_mode & 0o100)
 
     def test_refuses_a_download_whose_checksum_differs(self):
         payload = tarball('demo', b'tampered')
