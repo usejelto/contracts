@@ -15,7 +15,9 @@ For installation and account help, see [SUPPORT.md](SUPPORT.md).
 
 ## Local development
 
-Go 1.26.8 or later, Python 3.11 or later for release tooling, and Make. The Go requirement is recorded in `go.mod`.
+The Go release `go.mod` names (`make` selects it through `GOTOOLCHAIN`, so Go
+downloads it once if a different one is installed), Python 3.11 or later for
+release tooling, and Make.
 
 Fork and clone this repository, create a branch from `main`, and run commands
 from this component's root. The standalone checkout contains its build inputs;
