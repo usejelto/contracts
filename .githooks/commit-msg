@@ -1,0 +1,3 @@
+#!/bin/sh
+# Enabled by `make hooks`. The check itself lives in tools/quality/githooks.
+exec sh "$(git rev-parse --show-toplevel)/tools/quality/githooks/commit-msg" "$@"

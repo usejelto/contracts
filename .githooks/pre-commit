@@ -1,0 +1,4 @@
+#!/bin/sh
+# Enabled by `make hooks`. The check itself lives in tools/quality/githooks.
+root=$(git rev-parse --show-toplevel)
+exec sh "$root/tools/quality/githooks/pre-commit" "$root/tools/quality"
