@@ -78,7 +78,7 @@ arms:
           From there C16 asserts "queue holds x...y". It does not and cannot:
           the five x's were in the batch the switch answered, that answer was a
           202, and wire §2a makes a 202 an acceptance of the envelope however
-          many events it rejected. Nothing in RFC-0001 §8 or wire §6/§8 tells a
+          many events it rejected. Nothing in wire §6/§8 tells a
           client to re-queue an event rejected `stopped`, and wire §8's own
           rationale says the opposite in as many words -- a client that drains
           into a live switch "spends its whole backlog", which is why the probe

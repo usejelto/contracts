@@ -3,13 +3,13 @@ title: the immediate install deadline and queued event survive a relaunch
 implements: spec/sdk-conformance.md §4 C4c
 notes: |
   TWO arms, and they are not the same test. The first ends the host with `exit`,
-  which is a graceful death: the SDK is told, and §8.3 item 7 gives it a
+  which is a graceful death: the SDK is told, and it gets a best-effort
   termination flush to write in. The second SIGKILLs it.
 
   Until 2026-09-02 only the first existed, and `runner/hostproc.go`'s `Kill` --
   whose comment named this very row -- had NO CALLER. So this scenario asserted
-  persistence across an orderly death for the life of the repo, while RFC-0001
-  §8.2 item 4 requires the deadline and queued event to survive a process
+  persistence across an orderly death for the life of the repo, while the
+  install-claim rule requires the deadline and queued event to survive a process
   that ENDS, abruptly included. An SDK that wrote `install_due_at` on the way out
   rather than at the moment it drew it passed. `spec/conformance/TODO.md` §7 has
   the finding.
@@ -17,7 +17,7 @@ notes: |
   Two details make arm B discriminate rather than merely differ:
 
   (1) `installid` before the kill. `init` returns before bootstrap has run
-  (§8.2 item 1, C1), so a kill straight after `init` might land before the SDK
+  (C1), so a kill straight after `init` might land before the SDK
   has drawn a deadline at all -- and the arm would then be measuring a race
   instead of a rule. `installid` cannot be answered without the install id, so
   its reply is proof the SDK has loaded or created its state and drawn the

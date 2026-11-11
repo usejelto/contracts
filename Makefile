@@ -95,7 +95,7 @@ signatures: ## Refresh the generated referrer-spam read table and print every si
 	missing=$$(comm -23 $$ingest $$read_only | tr '\n' ' '); \
 	rm -f $$body $$ingest $$read_only; \
 	echo "$(SPAM_READ_FILE): $$before -> $$count hostnames, upstream $$commit"; \
-	if [ -n "$$missing" ]; then echo "ingest-only hosts (unioned into the read table at load, spec/metrics.md §6b): $$missing"; fi; \
+	if [ -n "$$missing" ]; then echo "ingest-only hosts (unioned into the read table at load): $$missing"; fi; \
 	echo; \
 	echo "signature pins -- a hand-curated table is never regenerated, so read it before you trust it:"; \
 	grep -H -E '^# (Upstream|Pinned|Refresh):' spec/signatures/*.yaml spec/signatures/*.txt

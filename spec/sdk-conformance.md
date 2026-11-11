@@ -1,7 +1,7 @@
 # spec/sdk-conformance — SDK behavioural contract as tests
 
 Status: v0.18 · Gates: M1 (Swift), M3 (Electron, Tauri 2, .NET desktop) · Normative for: every SDK that calls itself
-Jelto-compatible. RFC-0001 §8 lists the rules; this document makes each one a test.
+Jelto-compatible. This document makes each SDK behaviour rule a test.
 
 ## 1. Harness
 
@@ -21,18 +21,18 @@ about one of them, and an SDK is free in every respect they do not reach:
    is still a connection, which is what C5's "no socket opened" watches.
 2. **The host process** — its stdout replies (§3.1 gives one JSON line per command), its exit
    code, and how long it took to exit (C1, C2, C5, C10, C18).
-3. **The host's stderr** — the SDK's own debug output under `JELTO_DEBUG=1` (RFC-0001 §8.7
-   item 17). Eleven scenarios assert a line here — C8c, C9b, C10, C16, C16b, C17, C20b, C22c,
+3. **The host's stderr** — the SDK's own debug output under `JELTO_DEBUG=1` (C17).
+   Eleven scenarios assert a line here — C8c, C9b, C10, C16, C16b, C17, C20b, C22c,
    W2, W3, W4 — and they have to: a rule of the form *do not send this* leaves nothing in the
    recording by construction, so the debug line is the only thing separating an SDK that dropped
    the call for the stated reason from one that lost it.
-4. **The state the host exports** — `dumpstate` (§3.2) prints the facts RFC-0001 §8 requires an
-   SDK to survive a launch with, as canonical JSON. It is **not** the SDK's storage: C2, C4, C4b,
+4. **The state the host exports** — `dumpstate` (§3.2) prints the facts an SDK is required to
+   survive a launch with, as canonical JSON. It is **not** the SDK's storage: C2, C4, C4b,
    C4c, C6, C8c, C9b and C18 assert on the export, and how the SDK arrived at the answer — a
    plist, `UserDefaults`, SQLite, a JSON file — is its own business.
 5. **The emptiness of `JELTO_STATE_DIR`** — and nothing else about what is in it. This one stays a
-   file-system assertion on purpose. RFC-0001 §8.2 item 5's "no file is created" (C5) and §8.7
-   item 18's wipe (C18, C22d) are claims about the directory itself; they hold for every storage
+   file-system assertion on purpose. The rule that no file is created before `init` (C5) and the
+   `disable()` wipe (C18, C22d) are claims about the directory itself; they hold for every storage
    format because the runner owns the directory and can simply look; and an export could not
    carry them anyway, since a state an SDK has forgotten it wrote is exactly the state that
    reports itself empty while the bytes are still on disk.
@@ -97,7 +97,7 @@ until v0.14, one refusing and one calling the SDK with nothing.
 
 **One reply per command.** The host MUST write exactly one line of JSON to **stdout** for every
 command it reads, after that command has been carried out, and MUST write nothing else there —
-the SDK's own output belongs on stderr (RFC-0001 §8.7 item 17). **The prohibition binds the SDK
+the SDK's own output belongs on stderr (C17). **The prohibition binds the SDK
 too, and that is the half this section left unsaid until v0.13.** The SDK runs *inside* the host
 process and shares its file descriptors, so an SDK that prints to stdout — `console.log`, `print`,
 a structured logger left on its default sink — writes into the reply channel, and the host cannot
@@ -149,7 +149,7 @@ reply — which is what makes it evidence rather than decoration.
 | `JELTO_ENDPOINT` | the `mockd` URL the SDK posts to. Required; a host without one has nothing to be conformant against |
 | `JELTO_STATE_DIR` | where the SDK persists — root and all, overriding the platform default of §5. Required. The runner owns this directory: it hands each arm a fresh empty one and reads its emptiness back (§1, surface 5) |
 | `JELTO_NOW` | pins the SDK's clock, in whole milliseconds. **Its presence is the pin**, so `JELTO_NOW=0` is a legal 1970-01-01 clock (C15) and not "unset" |
-| `JELTO_DEBUG` | `1` turns on the payload printing RFC-0001 §8.7 item 17 requires. Twelve of §4's scenarios set it, and C10 asserts the other direction: nothing reaches stderr without it |
+| `JELTO_DEBUG` | `1` turns on the payload printing C17 asserts. Twelve of §4's scenarios set it, and C10 asserts the other direction: nothing reaches stderr without it |
 | `JELTO_MOCK` | a §2 mode string the host forwards verbatim as the `X-Mock` request header. §2's first line has always required this and this list omitted it. The suite drives modes through the runner's control socket, so no scenario sets it — but an SDK author reproducing one arm by hand has no socket, and the header is the only other channel |
 | `JELTO_INSTALL_ORIGIN` | optional host init hint: `new`, `existing`, or `unknown`; absent/invalid becomes `unknown`. The host passes this through the public SDK init API; it is not an SDK environment dependency (C4d). |
 | `JELTO_APP_VERSION` | application version observed at initialization; presence overrides platform metadata, including the empty string (unknown). Unset uses the host application version |
@@ -179,8 +179,8 @@ falls due, and returns once the work that fell due has settled. That is the only
 which C3's `sleep 3000`, C4's `sleep 3000` and C4b's thirty days mean anything. **Without
 `JELTO_NOW` the clock is the real one and `sleep <ms>` really sleeps**, which is what C7's
 "2 s ± 0.5 s", C8's head-of-schedule and C22's "≤ 2 s" require: those are assertions on `mockd`'s
-arrival times, and `mockd` cannot see a frame the host invented. The request timeout of RFC-0001
-§8.3 item 8 is real in both frames — it is a property of the network, not of the host's calendar,
+arrival times, and `mockd` cannot see a frame the host invented. The SDK's request timeout
+is real in both frames — it is a property of the network, not of the host's calendar,
 and a virtual one would never fire against `slow:10000`.
 
 ### 3.2 `dumpstate` — the state contract
@@ -198,32 +198,32 @@ not set is absent or empty; a host MAY add keys and the runner ignores them.
 
 | Key | Type | The rule it serves |
 |---|---|---|
-| `install_id` | UUIDv4 string, `""` before `init` and after `disable()` | §8.2 item 2 — loaded on launch, created if absent (C2, C18) |
-| `last_heartbeat_day` | UTC day index, `floor(ms / 86 400 000)`, decimal string | §8.2 item 3 — a `heartbeat` is enqueued only when this differs from today, at `init` and whenever a running SDK's clock enters a new UTC day (C3, C3b, C22) |
-| `install_claimed` | boolean | §8.2 item 4 — set on a `202`, or after 30 days of attempts (C4, C4b) |
-| `install_due_at` | instant | §8.2 item 4 — drawn and persisted once when the SDK first sees `install_claimed = false`, equal to the draw instant with no random offset. Relaunch resumes this deadline rather than redrawing it, including after abrupt death (C4c) |
+| `install_id` | UUIDv4 string, `""` before `init` and after `disable()` | loaded on launch, created if absent (C2, C18) |
+| `last_heartbeat_day` | UTC day index, `floor(ms / 86 400 000)`, decimal string | a `heartbeat` is enqueued only when this differs from today, at `init` and whenever a running SDK's clock enters a new UTC day (C3, C3b, C22) |
+| `install_claimed` | boolean | the install claim: set on a `202`, or after 30 days of attempts (C4, C4b) |
+| `install_due_at` | instant | the install deadline: drawn and persisted once when the SDK first sees `install_claimed = false`, equal to the draw instant with no random offset. Relaunch resumes this deadline rather than redrawing it, including after abrupt death (C4c) |
 | `install_origin` | `new`, `existing`, or `unknown` | frozen with the claim deadline, survives changed init hints and abrupt death; legacy omission and identity reset are `unknown` (wire §5.2, C4d) |
-| `install_first_try` | instant | §8.2 item 4's "after 30 days of attempts" — a 30-day window has to be measured from something, and it is not the current launch or a machine that relaunches daily never reaches it (C4b) |
-| `install_props` | object, string → string | §8.1 `setProps`, "persisted, sent with every heartbeat" (C22, C22d) |
-| `backoff_step_ms` | integer; `0` or absent means *not in backoff* | §8.3 item 8, "persisted across launches" — the step is what a new process must not restart at 1 s (C8, C8c, C9b) |
-| `backoff_next_at` | instant | §8.3 item 8 — a step does not say *when*, and C8c reads from here the two edges it cannot watch elapse |
-| `stop_until` | instant | §8.6 item 16 and wire §8 — a switch a relaunch has forgotten is not a switch (C16) |
+| `install_first_try` | instant | the install claim's "after 30 days of attempts" — a 30-day window has to be measured from something, and it is not the current launch or a machine that relaunches daily never reaches it (C4b) |
+| `install_props` | object, string → string | `setProps`, "persisted, sent with every heartbeat" (C22, C22d) |
+| `backoff_step_ms` | integer; `0` or absent means *not in backoff* | the retry backoff, "persisted across launches" — the step is what a new process must not restart at 1 s (C8, C8c, C9b) |
+| `backoff_next_at` | instant | the retry backoff — a step does not say *when*, and C8c reads from here the two edges it cannot watch elapse |
+| `stop_until` | instant | wire §8 — a switch a relaunch has forgotten is not a switch (C16) |
 | `stop_probe_due` | boolean | wire §8's single-`heartbeat` probe is a MUST, and it is owed across a relaunch too. Without this fact a restart inside a pause drains the queue straight into a live switch, which is the one thing the probe exists to prevent |
 | `last_app_version` | string or absent | last known observed version, §7; absent on legacy/unknown state |
-| `queue` | object, below | §8.3 item 6 (C6, C4b, C18) |
+| `queue` | object, below | the capped queue (C6, C4b, C18) |
 
 That is the whole list, and every row is derived from a rule rather than transcribed from an
-implementation: each names the RFC item that makes the fact survive a launch, and a fact no item
+implementation: each names the rule that makes the fact survive a launch, and a fact no rule
 requires is not in the export. The reference host persists one more, a consecutive-refusal
 counter — it is recomputable from `backoff_step_ms`, no rule asks an SDK to keep it, and so it
 stays that host's own bookkeeping and the runner never reads it.
 
 **Instants are decimal strings, not JSON numbers.** Every value typed *instant* above is
 milliseconds on the SDK's clock written as a decimal string, and so is `last_heartbeat_day`. The
-clock is arbitrary precision — C15b sends a `t` past `int64` and RFC-0001 §8.5 forbids the SDK
+clock is arbitrary precision — C15b sends a `t` past `int64` and C15 forbids the SDK
 correcting it — so a reader that took these as JSON numbers would decode them into a float64 and
 round them, the same trap the wire's own `t` sets for a `map[string]any`. Nothing else in the
-export is an instant: `backoff_step_ms` is a *duration* bounded by §8.3 item 8's 1 h ceiling, and
+export is an instant: `backoff_step_ms` is a *duration* bounded by C8's 1 h ceiling, and
 `install_claimed` and `stop_probe_due` are booleans.
 
 **`queue`** is what the SDK is holding, oldest first, and how much it counts that as:
@@ -243,13 +243,13 @@ for what a recording cannot show — a queue that was capped, refused or wiped. 
 field beside `events` on purpose: a count and a list that disagreed would leave the runner to
 choose between them on exactly the row (C6) that is testing the cap.
 
-**`bytes` is what the SDK counts against its own cap, not what a file system reports.** RFC-0001
-§8.3 item 6 caps the queue at "1 MB **or** 1 000 events" and C6 asserts both halves. A semantic
+**`bytes` is what the SDK counts against its own cap, not what a file system reports.** The queue
+is capped at "1 MB **or** 1 000 events" and C6 asserts both halves. A semantic
 export cannot report bytes-on-disk, and it should not want to: an on-disk figure is not comparable
 between implementations — a JSON-lines file is exactly its lines, a plist is padded, a SQLite
 database has pages, a free list and possibly a write-ahead log — so a cap read off `stat` would
-forbid on one platform a queue it permits on another while both hold the same events. Item 6 sits
-beside item 11's 2 MB memory ceiling and bounds the same thing: what the SDK is **holding**. So
+forbid on one platform a queue it permits on another while both hold the same events. The queue cap sits
+beside C11's 2 MB memory ceiling and bounds the same thing: what the SDK is **holding**. So
 `bytes` is the serialised size of the queued events in whatever encoding the SDK would send or
 store them in, and the cap binds on that. This is what the 1 MB has always meant.
 
@@ -270,7 +270,7 @@ failing row wherever a row asserts it, never a plausible value the host supplied
 has to work the answer out, the SDK did not survive the launch and the export is lying about it.
 And the read is only a read: `dumpstate` MUST NOT create, load or write anything, so that calling
 it before `init` prints an empty export and leaves the state directory as empty as it found it
-(§8.2 item 5, C5). A host that fills its own gaps certifies nothing, and §6 certifies the SDK
+(C5). A host that fills its own gaps certifies nothing, and §6 certifies the SDK
 behind the host.
 
 ## 4. Scenarios
@@ -294,9 +294,9 @@ grammar (`^[a-z0-9_:.-]{1,64}$`), which is why `k` alone is substituted and they
 | **C1** | `init k` then immediately `track x` ×1000 then `exit` | `init` returns in < 5 ms (host measures); process exits within 1 s; no crash |
 | **C2** | `init k`, `installid`, `exit`; new process `init k`, `installid` | same UUIDv4 both times; state contains it; nil UUID never printed |
 | **C3** | `init k`, `sleep 3000`; then `JELTO_NOW += 1 day`, new process `init k`, `sleep 3000` | recording has exactly 2 `heartbeat` events, one per UTC day; a third `init` on the same day sends none |
-| C3b | `init k`, `sleep 3000`; then, in the **same** process, `sleep 86400000`; `sleep 3000` | recording has exactly 2 `heartbeat` events, the second dated the new UTC day and sent with no second `init`; `last_heartbeat_day` moves to that day. RFC-0001 §8.2 item 3 makes the day check a property of a running SDK, not of `init`: C3 alone was satisfied by an SDK that never looked at the calendar again after launch, and such an SDK reports a login-item or tray app active on the days it was launched rather than the days it ran (measured on EQBase at roughly half its true daily count). The pinned clock observes the rule and not the timer behind it: on the real clock the boundary wake MUST run on a clock that keeps going through system sleep, and that half is a review item, since no host here can put a machine to sleep |
+| C3b | `init k`, `sleep 3000`; then, in the **same** process, `sleep 86400000`; `sleep 3000` | recording has exactly 2 `heartbeat` events, the second dated the new UTC day and sent with no second `init`; `last_heartbeat_day` moves to that day. §3.2's `last_heartbeat_day` rule makes the day check a property of a running SDK, not of `init`: C3 alone was satisfied by an SDK that never looked at the calendar again after launch, and such an SDK reports a login-item or tray app active on the days it was launched rather than the days it ran (measured on EQBase at roughly half its true daily count). The pinned clock observes the rule and not the timer behind it: on the real clock the boundary wake MUST run on a clock that keeps going through system sleep, and that half is a review item, since no host here can put a machine to sleep |
 | **C4** | `init k`; `sleep 3000` (with `JELTO_NOW`); then another launch | `install` is enqueued immediately on first init, with `install_due_at` equal to the draw instant; exactly one `install` event (no attribution payload; the optional `props.install_origin` is a coarse host classification); state marks `install_claimed` on `202`; a further `init` sends no second `install` |
-| C4b | as C4 but `mockd down` for 30 days of simulated time, then `ok` | `install` retried on each launch; after 30 simulated days state marks claimed without a `202` and **no further `install` event is enqueued**. That last clause is the whole of what "no further attempts" can mean here: RFC-0001 §8.2 item 4 says what marking claimed stops, and what it stops is the enqueueing of a second `install`. Nothing in the contract discards an event already in the queue because a timer expired, so the copy already queued keeps being offered with the rest of the batch — §8.3 item 8 doing its job — and the queue holds exactly **one** `install` however many launches have offered it |
+| C4b | as C4 but `mockd down` for 30 days of simulated time, then `ok` | `install` retried on each launch; after 30 simulated days state marks claimed without a `202` and **no further `install` event is enqueued**. That last clause is the whole of what "no further attempts" can mean here: The install-claim rule says what marking claimed stops, and what it stops is the enqueueing of a second `install`. Nothing in the contract discards an event already in the queue because a timer expired, so the copy already queued keeps being offered with the rest of the batch — the retry rule doing its job — and the queue holds exactly **one** `install` however many launches have offered it |
 | C4c | as C4 but the process ends before the initial flush; new process `init k`. Arm A ends with `exit`; arm B **SIGKILLs it** after `installid` confirms bootstrap completed | The immediate deadline is persisted when drawn, and the queued event survives abrupt death. Relaunch resumes that deadline and sends the install if still queued. Arm A permits a termination flush; arm B proves persistence without one. The restart advances 7 h: a lost deadline redrawn there is 25 200 s from the initial `jelto_now` anchor and fails `min: 0, max: 0` (C4c; `spec/conformance/TODO.md` §7) |
 | C4d | Initialize with `new`, omitted, and `existing` hints; kill the existing-origin host after `installid`, then restart with a `new` hint | Origin is captured durably; `new`, `existing`, and default `unknown` are carried only by install. The changed hint after abrupt restart does not reclassify the pending claim. |
 | **C5** | `track x` ×10, `sleep 5000`, `exit` — **no `init`** | recording empty; state dir empty; no socket opened (runner watches `mockd` connections) |
@@ -310,10 +310,10 @@ grammar (`^[a-z0-9_:.-]{1,64}$`), which is why `k` alone is substituted and they
 | **C8** | `mockd 503`; `init k`; `track x`; observe the head of the schedule on the **real** clock | retries on a backoff of ~1, 2, 4, 8 … s with ±20 % jitter, capped at 3 600 s; state persists it (a new process continues, does not restart at 1 s). **An hour of this cannot be simulated**: §1's recording times every arrival in real monotonic microseconds, and a backoff is a claim about *differences* in that frame, so under a pinned `JELTO_NOW` every retry lands within milliseconds of the last and the schedule disappears rather than compressing. The head of each schedule is where the three arms differ from one another, so the head is what is observed, on the real clock; a claim about the ceiling or the tail is read from the backoff the SDK persisted instead (C8c). Same for `429` and `down` — but **the observed schedule is the backoff composed with the server's `Retry-After`, not the backoff alone**, and the arms differ because of it: `down` has no response and so no header, and shows the pure ~1, 2, 4, 8 …; `503` and `429` carry `Retry-After: 2`, so the first wait is ≥ 2 s where the step is ~1 s ±20 %, giving ~2, 2, 4, 8 … The rule is one line — **the next attempt is at the later of the two floors** (wire §9) — and C8b measures it. Through wire rev 0.16 this row and the wire contradicted each other and both were satisfiable: the wire advertised `Retry-After` and required nothing of the client, so a ~1 s first retry fired before the moment the server had just named. **Every retry resends the same batch with the same `id`s** — `spec/wire-v1.md` §6 says a client MUST NOT treat a lost `202` as a reason to alter the `id`s in the batch it resends, and until now nothing in this suite asserted it. An SDK that regenerates them defeats the server's 10-minute window, so a batch that was in fact stored is stored again on every retry and the customer reads the duplicates as real traffic. |
 | C8b | `mockd 429:20`; `init k`; `track x`; observe the head of the schedule — then the same run with `mockd down` | with the header, **no request before 20 s**, and the schedule thereafter is the later of the two floors at every step, so the header governs until the backoff overtakes it. **Where it overtakes, exactly**: the waits are 20, 20, 20, 20, 20, then 32, because the backoff's 16 s step is still under the header at the top of its ±20 % jitter and its 32 s step is over it at the bottom. So at `Retry-After: 20` the crossover is the **sixth** retry and arrives ~132 s after the first attempt — two minutes of wall time to watch one number, and not observable any other way, since the clock this row is measured on is the real one (C8). The suite therefore asserts the identical rule at `429:3`, where the same arithmetic puts the crossover at the third retry — 3, 3, 4, 8, the arm over in ~18 s. One rule; only the number moves. Without the header, the same run retries at ~1 s. The pair is what makes C8 an assertion about composition rather than about one number: the two runs differ only in a header, and an SDK that ignores `Retry-After` produces the same schedule for both. |
 | C8c | `429:9999`, then `429:` (no header), then `429:soon`, then `503:1` at the tenth consecutive refusal | `9999` is honoured but **clamped to 3 600 s**, the same ceiling C8 puts on the SDK's own backoff — an unbounded header is a second kill switch settable by any proxy on the path (wire §9). No header falls back to the backoff alone, identical to C8's `down` arm. `soon` is unparseable and is treated as **absent, never as zero**: a proxy that rewrites the header must not be able to turn a refusal into an immediate retry. And a `Retry-After: 1` at the tenth refusal does **not** shorten or reset the schedule — the step is already ~512 s and stays there. **Two of these four edges cannot be watched elapse, and are asserted from the backoff the SDK persisted** — §1 makes the exported state an assertion surface (§3.2), and both are claims about a wait the SDK has *scheduled* rather than one it has served. The clamp is a 3 600 s wait; and the tenth consecutive refusal is ~511 s into the schedule before its step is measured at all, that being the nine waits ahead of it (1 + 2 + 4 + … + 256 s). So the `9999` arm reads the deadline written after a single refusal and expects 3 600 s from that response rather than 9 999, and the tenth-refusal arm runs on a simulated clock — ten refusals cost ten `sleep`s and no real time — and reads the wait scheduled after the tenth: ~512 s, which is neither the 1 s the header named nor the 1 s a reset would put back. |
-| **C9b** | `mockd 402`; `init k`; `track x`; `sleep 5000`; `track y`; `sleep 6000` | **no retry of either event and no backoff loop** — `402` is final, like `400` (`spec/wire-v1.md` §2a; RFC-0001 §8.3 item 9). The batch is dropped, one debug line names `payment_required`, and the SDK keeps accepting calls: the host app must not change behaviour because the customer's billing lapsed. A `402` arrives whenever a product is `paused` or its trial expired without a subscription, so an SDK that treated it as retryable would hammer the endpoint for the life of the install. |
+| **C9b** | `mockd 402`; `init k`; `track x`; `sleep 5000`; `track y`; `sleep 6000` | **no retry of either event and no backoff loop** — `402` is final, like `400` (`spec/wire-v1.md` §2a). The batch is dropped, one debug line names `payment_required`, and the SDK keeps accepting calls: the host app must not change behaviour because the customer's billing lapsed. A `402` arrives whenever a product is `paused` or its trial expired without a subscription, so an SDK that treated it as retryable would hammer the endpoint for the life of the install. |
 | **C9** | `mockd 400`; `init k`; `track x`; `sleep 5000`; `mockd ok`; `track y`; `sleep 6000` | exactly one request with `x` (no retry); `y` is sent in a fresh batch |
 | **C10** | `mockd slow:10000` and `mockd 500`-style garbage responses, invalid JSON, oversized bodies; `init k`; `track` ×100; `exit` | host exit code 0; nothing written to stderr except with `JELTO_DEBUG=1` |
-| **C11** | `init k`; `track x` ×10 000 over 10 s | the SDK's own accounted state ≤ 2 MB (`dumpstate`, not host RSS — RFC-0001 §8.3 item 11, v0.24); per-`track` wall time ≤ 1 ms p99 (host measures) |
+| **C11** | `init k`; `track x` ×10 000 over 10 s | the SDK's own accounted state ≤ 2 MB (`dumpstate`, not host RSS); per-`track` wall time ≤ 1 ms p99 (host measures) |
 
 ### Attribution ladder (removed)
 
@@ -328,8 +328,8 @@ this document, in the server's design record, and in any conformance log already
 | C | Scenario | Assert |
 |---|---|---|
 | **C15** | `JELTO_NOW` = 1970-01-01 and then = now + 10 years; `init k` | `t` is sent as the host clock says, unmodified; no client-side correction |
-| C15b | `JELTO_NOW` = 1969-07-20 (a host clock **before** the epoch), then a clock so far ahead that `t` exceeds `int64`; `init k` | the same: `t` is sent as the host clock says, and the request still validates against `spec/wire-v1.schema.json` (W1). This is the half C15 never reached — it set the clock **to** 1970-01-01, which is `t = 0`, so a negative `t` was never sent, and until wire rev 0.16 the schema's `minimum: 0` would have failed the body while the server stored the event. Wire §3 clamps every `t`, so neither case may be corrected, dropped or held back by the SDK; the server answers `202` and stores `ingest_ts`. **No platform clock reaches the second arm** and none is asked to: a Swift `Date` is a `Double` of seconds and a Go `time.Time` an `int64` of nanoseconds, so neither yields a millisecond value outside `int64` unless the SDK computes one. The value arrives through `JELTO_NOW`, the conformance host's clock (§3), which must carry it at the width it was given, and what the arm tests is therefore the SDK's **arithmetic**, not its clock: whatever the clock abstraction hands the SDK goes on the wire as it stands, because saturating it into `int64` is precisely the correction RFC-0001 §8.5 forbids. The saturation belongs to the server, which does it on arrival and then clamps like any other `t` (wire §3) |
-| **C16** | `mockd stop:60`; `init k`; `track x` ×5; `sleep 30 s`; `mockd ok`; `track y`; `sleep 40 s` | after the `stop` response no request for 60 s; what is tracked during the pause queues (cap applies), and **the queue holds `y` alone**; at ~60 s one `heartbeat`, then the queue drains. The five `x`s are not in it: they were in the batch the switch answered, that answer was a `202`, and wire §2a makes a `202` an acceptance of the envelope however many events it rejected. Nothing in RFC-0001 §8 or wire §6/§8 re-queues an event rejected `stopped`, and §8's own rationale says the opposite in as many words — a client draining into a live switch "spends its whole backlog" — which is *why* the probe exists. The recorded order is `[heartbeat, x, x, x, x, x]`, then `[heartbeat]`, then `[y]`: `x` went out once, before the pause, and was never resent. The single-heartbeat probe is a wire **MUST** as of rev 0.17 (§8) and was a `MAY` before it, so an SDK that drained the queue straight into a switch that was still on broke nothing the wire said while failing this row. It is the probe that is required, not merely the pause: draining a thousand queued events into a live switch answers `stopped` **per event**, counted per event, to learn what one event would have told it |
+| C15b | `JELTO_NOW` = 1969-07-20 (a host clock **before** the epoch), then a clock so far ahead that `t` exceeds `int64`; `init k` | the same: `t` is sent as the host clock says, and the request still validates against `spec/wire-v1.schema.json` (W1). This is the half C15 never reached — it set the clock **to** 1970-01-01, which is `t = 0`, so a negative `t` was never sent, and until wire rev 0.16 the schema's `minimum: 0` would have failed the body while the server stored the event. Wire §3 clamps every `t`, so neither case may be corrected, dropped or held back by the SDK; the server answers `202` and stores `ingest_ts`. **No platform clock reaches the second arm** and none is asked to: a Swift `Date` is a `Double` of seconds and a Go `time.Time` an `int64` of nanoseconds, so neither yields a millisecond value outside `int64` unless the SDK computes one. The value arrives through `JELTO_NOW`, the conformance host's clock (§3), which must carry it at the width it was given, and what the arm tests is therefore the SDK's **arithmetic**, not its clock: whatever the clock abstraction hands the SDK goes on the wire as it stands, because saturating it into `int64` is precisely the correction C15 forbids. The saturation belongs to the server, which does it on arrival and then clamps like any other `t` (wire §3) |
+| **C16** | `mockd stop:60`; `init k`; `track x` ×5; `sleep 30 s`; `mockd ok`; `track y`; `sleep 40 s` | after the `stop` response no request for 60 s; what is tracked during the pause queues (cap applies), and **the queue holds `y` alone**; at ~60 s one `heartbeat`, then the queue drains. The five `x`s are not in it: they were in the batch the switch answered, that answer was a `202`, and wire §2a makes a `202` an acceptance of the envelope however many events it rejected. Nothing in wire §6/§8 re-queues an event rejected `stopped`, and §8's own rationale says the opposite in as many words — a client draining into a live switch "spends its whole backlog" — which is *why* the probe exists. The recorded order is `[heartbeat, x, x, x, x, x]`, then `[heartbeat]`, then `[y]`: `x` went out once, before the pause, and was never resent. The single-heartbeat probe is a wire **MUST** as of rev 0.17 (§8) and was a `MAY` before it, so an SDK that drained the queue straight into a switch that was still on broke nothing the wire said while failing this row. It is the probe that is required, not merely the pause: draining a thousand queued events into a live switch answers `stopped` **per event**, counted per event, to learn what one event would have told it |
 | C16b | `stop` with `scope: web` | app SDK ignores it |
 | **C17** | `JELTO_DEBUG=1`; `init k`; `track x` | stderr contains the exact JSON body before it is sent |
 | **C18** | `init k`; `track x`; `disable`; `installid`; `track y`; `sleep 6000`; `exit` | the queue is deleted; `installid` prints empty; `y` never sent; state dir empty |
@@ -339,7 +339,7 @@ this document, in the server's design record, and in any conformance log already
 
 | C | Scenario | Assert |
 |---|---|---|
-| **C20** | `init k`; `onboarding permissions ok`; `onboarding driver fail no_kext`; `onboarding tour skip`; `sleep 6000` | three events named `onboarding:permissions`, `onboarding:driver`, `onboarding:tour` with `props.status` = `ok` / `fail` / `skip` and `props.reason = no_kext` only on the second; and, **but for `id` and `t`**, identical to what `track("onboarding:permissions", {"status":"ok"})` sends in the same batch — every other field, and the whole `props` object. It cannot be byte-identical: wire §3 gives every event its own `id` and its own `t`, so two calls a millisecond apart differ in exactly those two fields by construction, and a helper that reused either would be the defect this row is looking for rather than the thing it asserts. What is being asserted is that the helper **is** `track` and does nothing else (RFC-0001 §8.1) |
+| **C20** | `init k`; `onboarding permissions ok`; `onboarding driver fail no_kext`; `onboarding tour skip`; `sleep 6000` | three events named `onboarding:permissions`, `onboarding:driver`, `onboarding:tour` with `props.status` = `ok` / `fail` / `skip` and `props.reason = no_kext` only on the second; and, **but for `id` and `t`**, identical to what `track("onboarding:permissions", {"status":"ok"})` sends in the same batch — every other field, and the whole `props` object. It cannot be byte-identical: wire §3 gives every event its own `id` and its own `t`, so two calls a millisecond apart differ in exactly those two fields by construction, and a helper that reused either would be the defect this row is looking for rather than the thing it asserts. What is being asserted is that the helper **is** `track` and does nothing else |
 | C20b | `onboarding "Bad Step!" ok` and `onboarding x ok "Free text reason"` | both dropped client-side with a debug log naming the rule (step `^[a-z0-9_-]{1,32}$`, reason `^[a-z0-9_.-]+$`) |
 
 ### Install properties and app slug
@@ -347,7 +347,7 @@ this document, in the server's design record, and in any conformance log already
 | C | Scenario | Assert |
 |---|---|---|
 | **C21** | `init k mac`; `sleep 3000` | the heartbeat carries `a = "mac"`; without the argument no `a` field is sent |
-| **C22** | `init k`; `setprops {"license":"trial"}`; `sleep 3000`; `setprops {"license":"paid","edition":"pro"}`; `sleep 3000`; then `JELTO_NOW += 1 day`, new process `init k`, `sleep 3000` | first heartbeat has `props.license = trial`; the second `setprops` triggers an **immediate** heartbeat with `license = paid, edition = pro` (≤ 2 s); the next-process heartbeat still carries both (persisted). **The day has to turn for that last clause to have a subject.** RFC-0001 §8.2 item 3 enqueues a `heartbeat` only when `last_heartbeat_day ≠ today (UTC)`, and C3 asserts in as many words that a third `init` on the same day sends none — so a new process on the same day sends no heartbeat at all, and a row that read the props off it would be reading a request that was never made |
+| **C22** | `init k`; `setprops {"license":"trial"}`; `sleep 3000`; `setprops {"license":"paid","edition":"pro"}`; `sleep 3000`; then `JELTO_NOW += 1 day`, new process `init k`, `sleep 3000` | first heartbeat has `props.license = trial`; the second `setprops` triggers an **immediate** heartbeat with `license = paid, edition = pro` (≤ 2 s); the next-process heartbeat still carries both (persisted). **The day has to turn for that last clause to have a subject.** §3.2's `last_heartbeat_day` rule enqueues a `heartbeat` only when `last_heartbeat_day ≠ today (UTC)`, and C3 asserts in as many words that a third `init` on the same day sends none — so a new process on the same day sends no heartbeat at all, and a row that read the props off it would be reading a request that was never made |
 | C22b | `setprops {"license":"paid"}` twice with the same value | no extra heartbeat on the second call (unchanged) |
 | C22c | `setprops {"Email":"x@y.z"}` and a value of 30 chars | dropped client-side with a debug log (key `^[a-z0-9_]{1,32}$`, value `^[a-z0-9_.-]{1,24}$`); the server would reject them anyway |
 | C22d | `disable()` after `setprops` | props wiped with the rest of the state |
@@ -372,7 +372,7 @@ the directory, that the other eight state scenarios read.
 
 On POSIX hosts the SDK creates its state directory owner-only (`0700`) and every file it writes
 there owner-only (`0600`), re-asserting the mode on a directory that already exists, because what
-is inside is an install identifier and the customer's queued events (threat model A2) and another
+is inside is an install identifier and the customer's queued events and another
 local account on the same host is not the customer's end user. On Windows the per-user
 `LocalApplicationData` ACL is the bound. The runner does not assert this — §1's fifth surface is the
 directory's emptiness, not its mode — so each SDK's own unit tests pin it (v0.18).
@@ -388,13 +388,13 @@ never touches a renderer.
 State is under `Environment.SpecialFolder.LocalApplicationData`, partitioned by entry assembly,
 product key and app slug; `JELTO_STATE_DIR` overrides the entire path exactly. One background
 worker owns lifecycle, persistence and delivery. Process exit requests a flush bounded to 600 ms;
-framework-specific background hooks are outside v1. `spec/dotnet-sdk.md` fixes the public API,
+framework-specific background hooks are outside v1. The .NET SDK's own specification fixes the public API,
 packaging and additional verification gates.
 
 **Tauri 2.** State in `app.path().app_local_data_dir()/jelto`; the test override
 replaces the entire directory. Rust owns all app events through one Tokio worker.
 The headless host uses the same engine with the Tauri adapter disabled. Command
-permissions, bindings, C11 and C19 are separate gates in `spec/tauri-sdk.md` §3.
+permissions, bindings, C11 and C19 are separate gates in the Tauri SDK's own specification.
 
 ## 6. Certification
 

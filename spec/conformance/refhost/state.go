@@ -19,21 +19,21 @@ type State struct {
 
 	InstallOrigin   string            `json:"install_origin,omitempty"` // wire §5.2; frozen with the claim
 	InstallClaimed  bool              `json:"install_claimed"`
-	InstallDueAt    string            `json:"install_due_at,omitempty"`    // §8.2 item 4, the draw instant, persisted once (C4c)
+	InstallDueAt    string            `json:"install_due_at,omitempty"`    // the install deadline: the draw instant, persisted once (C4c)
 	InstallFirstTry string            `json:"install_first_try,omitempty"` // when attempts began; +30 d claims it anyway (C4b)
-	InstallProps    map[string]string `json:"install_props,omitempty"`     // §8.1 setProps, persisted (C22)
+	InstallProps    map[string]string `json:"install_props,omitempty"`     // setProps, persisted (C22)
 
-	BackoffStepMS int64  `json:"backoff_step_ms,omitempty"`  // §8.3 item 8; 0 means "not in backoff"
+	BackoffStepMS int64  `json:"backoff_step_ms,omitempty"`  // C8; 0 means "not in backoff"
 	BackoffNextAt string `json:"backoff_next_at,omitempty"`  // absolute, persisted across launches
 	BackoffFails  int    `json:"backoff_failures,omitempty"` // consecutive refusals; C8c turns on the tenth
 
-	StopUntilMS  string `json:"stop_until,omitempty"`     // §8.6 / wire §8, absolute ms on the SDK clock
+	StopUntilMS  string `json:"stop_until,omitempty"`     // wire §8, absolute ms on the SDK clock
 	StopProbeDue bool   `json:"stop_probe_due,omitempty"` // wire §8's single-heartbeat re-check is owed
 }
 
 // Store is the state directory. Nothing here touches the filesystem until
-// Load is called, which happens on `init` and never before: RFC-0001 §8.2
-// item 5, "no file is created" (C5).
+// Load is called, which happens on `init` and never before: "no file is
+// created" (C5).
 type Store struct {
 	dir string
 
@@ -54,7 +54,7 @@ func (s *Store) statePath() string { return filepath.Join(s.dir, stateFile) }
 func (s *Store) queuePath() string { return filepath.Join(s.dir, queueFile) }
 
 // Load reads state.json, creating neither the file nor the directory when it
-// is absent. A file that cannot be parsed is treated as absent: §8.3 item 10
+// is absent. A file that cannot be parsed is treated as absent: the SDK
 // swallows every failure, and a corrupt state costs an install id, not a
 // crash.
 func (s *Store) Load() State {
@@ -115,7 +115,7 @@ func (s *Store) Commit(mutate func(*State)) bool {
 	return true
 }
 
-// Wipe is RFC-0001 §8.7 item 18: disable() deletes the queue file and the
+// Wipe is C18's opt-out: disable() deletes the queue file and the
 // install_id. C18 asserts the state DIRECTORY is empty afterwards, so
 // everything refhost put there goes, not only the two fields.
 func (s *Store) Wipe() {

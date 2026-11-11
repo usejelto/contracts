@@ -3,7 +3,7 @@
 #
 # Input: ref_host (hostname, "www." stripped) or an app-side "ref:<host>" cohort.
 #
-# TWO layers, in this order (spec/metrics.md §6):
+# TWO layers, in this order:
 #   1. `exact_hosts` — the host itself or one of its subdomains. FIRST MATCH WINS.
 #   2. `signatures`  — lower-case SUBSTRING. FIRST MATCH WINS (gemini.google before google).
 # Unmatched hosts keep their own hostname as the label (category: other) so a new channel is
@@ -11,7 +11,7 @@
 #
 # Layer 0 runs before both of them and lives in its own file: a host on
 # spec/signatures/referrer-spam-read.txt is labelled `rules.spam` and never reaches these two
-# tables (spec/metrics.md §6b). It is a label, not a rejection — the rejection list is the short
+# tables. It is a label, not a rejection — the rejection list is the short
 # spec/signatures/referrer-spam.txt, and it is applied at ingest, never here.
 #
 # A needle that is a whole hostname belongs in `exact_hosts`, NEVER in `signatures`. A short
@@ -31,8 +31,8 @@
 #
 # categories: ai · search · community · social · email · site · direct · spam · other
 #
-# `aliases` and `paid_sources` are read by the SAME expression as the two needle tables
-# (spec/metrics.md §6, §6c). A tagged utm_source is canonicalised through `aliases` FIRST and
+# `aliases` and `paid_sources` are read by the SAME expression as the two needle tables.
+# A tagged utm_source is canonicalised through `aliases` FIRST and
 # the resolved label is what carries the category -- so `?utm_source=newsletter` arriving from
 # t.co is a Newsletter in the `email` category, not the `social` one its referrer would have
 # given it. Every alias target therefore MUST have a category: from its own row in the two
@@ -44,7 +44,7 @@ rules:
   direct: { label: Direct, category: direct }
   own_domain: { label: Site, category: site }
   unmatched: { label: "<hostname>", category: other, max_len: 40 }
-  # Layer 0 (spec/metrics.md §6b). The hosts are in referrer-spam-read.txt because they are
+  # Layer 0. The hosts are in referrer-spam-read.txt because they are
   # generated and there are thousands of them; the LABEL is here, with the other rule labels,
   # because it is one of the source table's answers. One bucket, not one row per spam host:
   # naming the individual spammer would put its domain on the customer's screen, which is the
@@ -218,8 +218,8 @@ alias_categories:
 
 # Ad click-id parameter NAME (never the value) → paid-source label. Presence alone is the signal.
 #
-# `medium` is the utm_medium the click implies ON READ when the tag carries none
-# (spec/metrics.md §6c). It is set on the four parameters that ONLY an ad click carries:
+# `medium` is the utm_medium the click implies ON READ when the tag carries none.
+# It is set on the four parameters that ONLY an ad click carries:
 # gclid, gbraid and wbraid are written by Google Ads auto-tagging and msclkid by Microsoft Ads
 # auto-tagging, and by nothing else. The last four have NO medium on purpose -- Meta, TikTok,
 # LinkedIn and X append their click id to ORGANIC outbound links too, so its presence is not
@@ -229,7 +229,7 @@ alias_categories:
 #
 # This ran at WRITE until it was deleted (reference audit F05): internal/ingest stamped
 # utm_medium = "(gclid)" into a stored LowCardinality column, which is a classification, and
-# RFC-0001 §4.1 puts classification on read so a stored row stays reclassifiable. It was also
+# this project keeps classification on read so a stored row stays reclassifiable. It was also
 # unreachable on the shape it named -- Google auto-tagging sends `?gclid=` with no utm
 # parameters at all, so the `utm_source = google` half of the condition was never true on a real
 # ad click. Both are fixed by the table being read here: gbraid and wbraid are covered for the

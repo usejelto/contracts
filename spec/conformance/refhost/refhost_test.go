@@ -62,7 +62,7 @@ func TestParseRetryAfter(t *testing.T) {
 	}
 }
 
-// RFC-0001 §8.3 item 6, and C6.
+// The queue cap, and C6.
 func TestQueueCapDropsTheOldestFirst(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "queue.jsonl")
 	queue := NewQueue(path)
@@ -91,7 +91,7 @@ func TestQueueCapDropsTheOldestFirst(t *testing.T) {
 	}
 }
 
-// RFC-0001 §8.5 and C15b: a day index is floor(ms / 86 400 000) for every
+// C15 and C15b: a day index is floor(ms / 86 400 000) for every
 // value, negative ones included, so a pre-epoch clock still has exactly one
 // heartbeat day.
 func TestDayIndexFloorsBelowTheEpoch(t *testing.T) {
@@ -113,7 +113,7 @@ func TestClockKeepsAValuePastInt64(t *testing.T) {
 	pin, _ := new(big.Int).SetString("99999999999999999999", 10)
 	clock.Pin(pin)
 	if got := string(literal(clock.Now())); got != "99999999999999999999" {
-		t.Fatalf("t = %s; saturating into int64 is the correction RFC-0001 §8.5 forbids", got)
+		t.Fatalf("t = %s; saturating into int64 is the correction C15 forbids", got)
 	}
 	if id := newUUIDv7(clock.Now()); id == NilUUID || len(id) != 36 {
 		t.Fatalf("newUUIDv7 produced %q for a clock past int64", id)
@@ -233,7 +233,7 @@ func exportedQueueOf(t *testing.T, export map[string]json.RawMessage) exportedQu
 
 // §3.2: "the read is only a read: `dumpstate` MUST NOT create, load or write
 // anything, so that calling it before `init` prints an empty export and leaves
-// the state directory as empty as it found it (§8.2 item 5, C5)". Both halves
+// the state directory as empty as it found it (C5)". Both halves
 // are asserted here, and the second one with a directory that does not exist at
 // all -- a `dumpstate` that called Load or MkdirAll would bring it into being.
 func TestDumpstateBeforeInitCreatesNothingAndReportsEmpty(t *testing.T) {
@@ -282,7 +282,7 @@ func TestDumpstateBeforeInitCreatesNothingAndReportsEmpty(t *testing.T) {
 
 // §3.2: "Instants are decimal strings, not JSON numbers ... a reader that took
 // these as JSON numbers would decode them into a float64 and round them". C15b
-// pins a clock past int64 and RFC-0001 §8.5 forbids correcting it, so the
+// pins a clock past int64 and C15 forbids correcting it, so the
 // export has to carry the digits it was given.
 func TestDumpstateExportsInstantsPastInt64AsDecimalStrings(t *testing.T) {
 	const pin = "99999999999999999999" // C15b's clock: past int64 by two digits
@@ -306,7 +306,7 @@ func TestDumpstateExportsInstantsPastInt64AsDecimalStrings(t *testing.T) {
 		}
 	}
 
-	// install_due_at is the other instant this arm sets: §8.2 item 4's immediate
+	// install_due_at is the other instant this arm sets: C4's immediate
 	// deadline, equal to a draw instant int64 cannot hold.
 	var dueAt string
 	if err := json.Unmarshal(export["install_due_at"], &dueAt); err != nil {
@@ -372,7 +372,7 @@ func TestImmediateInstallDeadlineAndQueuedEventSurviveRelaunch(t *testing.T) {
 }
 
 // §3.2: "`bytes` is what the SDK counts against its own cap, not what a file
-// system reports". RFC-0001 §8.3 item 6 caps the queue at 1 MB OR 1 000 events
+// system reports". The queue is capped at 1 MB OR 1 000 events
 // and C6 reads the byte half off this figure, so it has to be the running sum
 // the cap actually binds on -- and it has to bind before the event count does
 // on events of a few kilobytes, which is the whole reason §3.2 keeps the byte
@@ -401,7 +401,7 @@ func TestDumpstateQueueBytesIsWhatTheCapBindsOn(t *testing.T) {
 	queue := exportedQueueOf(t, dumpstateExport(t, replies))
 
 	if queue.Bytes > queueMaxBytes {
-		t.Fatalf("queue.bytes is %d, over §8.3 item 6's cap of %d", queue.Bytes, queueMaxBytes)
+		t.Fatalf("queue.bytes is %d, over the queue cap of %d", queue.Bytes, queueMaxBytes)
 	}
 	if queue.Bytes <= queueMaxBytes-8192 {
 		t.Fatalf("queue.bytes is %d after %d fat tracks; it is not tracking the running total the cap binds on", queue.Bytes, tracks)
@@ -412,7 +412,7 @@ func TestDumpstateQueueBytesIsWhatTheCapBindsOn(t *testing.T) {
 	if len(queue.Events) >= queueMaxEvents {
 		t.Fatalf("%d events held, so the COUNT cap bound; this arm exists to make the BYTE half do the work", len(queue.Events))
 	}
-	// Oldest dropped first (§8.3 item 6, C6's other half).
+	// Oldest dropped first (C6's other half).
 	if first := queue.Events[0].N; first == "x0" {
 		t.Fatal("x0 is still queued, so nothing was dropped from the front")
 	}
@@ -569,7 +569,7 @@ func TestVirtualSleepDoesNotReplyBeforeTheDueFlushIsDispatched(t *testing.T) {
 		t.Fatalf("%d request(s) arrived for the init flush, want 1", len(batches))
 	}
 
-	// The 5 s track debounce (§8.3 item 7) is now due at T+9000.
+	// The 5 s track debounce (C7) is now due at T+9000.
 	harness.host.dispatch("track y")
 	stall(&harness.sdk.queue.mu)
 	harness.host.dispatch("sleep 6000")

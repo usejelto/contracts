@@ -27,7 +27,7 @@ explicit assertion surface.
 
 ## 3. Immediate install timing — resolved
 
-RFC-0001 §8.2 item 4 now queues the install immediately on first init, with a
+The install rule (C4) now queues the install immediately on first init, with a
 persisted deadline equal to the draw instant. There is no install lottery or
 seed knob: the first batch carries the install with the initial heartbeat.
 
@@ -83,4 +83,4 @@ The host contract now also requires:
 across 10,000 `track` calls against a 2,048 KiB ceiling, with the baseline after
 `init`; CPU passed at p99 188 µs. `C11.yaml` skips this row for every host and delegates
 budget verification to Swift tests. Electron has no equivalent passing gate. The
-memory ceiling needs an RFC decision; the harness cannot certify it as satisfied.
+memory ceiling needs a design decision; the harness cannot certify it as satisfied.

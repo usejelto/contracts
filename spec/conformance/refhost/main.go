@@ -118,7 +118,7 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	// EOF on stdin is a termination, and §8.3 item 7 flushes best effort.
+	// EOF on stdin is a termination, and a termination flushes best effort.
 	host.reply(Reply{Cmd: "eof", OK: true})
 	sdk.Stop()
 	return 0

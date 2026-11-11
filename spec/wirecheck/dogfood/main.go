@@ -187,7 +187,7 @@ func (r *report) print(capture, schema string) {
 	for _, line := range r.batchDrops {
 		fmt.Printf("      line %d: %s\n", line.Number, line.Message)
 	}
-	fmt.Printf("  %d terminations that gave up with events still queued (RFC-0001 §8.3 item 7)\n", len(r.flushGaveUp))
+	fmt.Printf("  %d terminations that gave up with events still queued (best effort)\n", len(r.flushGaveUp))
 	for _, line := range r.flushGaveUp {
 		fmt.Printf("      line %d: %s\n", line.Number, line.Message)
 	}

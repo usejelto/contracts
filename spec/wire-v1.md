@@ -3,8 +3,8 @@
 Status: v1 draft, rev 0.26 (frozen at end of M1) · Gates: M1 · Normative for: server validation,
 `spec/wire-v1.schema.json`, every SDK, the snippet, `spec/sdk-conformance.md`.
 
-Key words MUST, SHOULD, MAY are RFC 2119. This document is the contract; RFC-0001 §2 is the
-rationale. Where they differ, this document wins.
+Key words MUST, SHOULD, MAY are RFC 2119. This document is the contract; where a design document
+behind it differs, this document wins.
 
 ## 1. Endpoint
 
@@ -16,8 +16,8 @@ Content-Type: application/json
 **`in.jelto.io` is the production ingest host, and every client MUST default to it.** Through rev
 0.18 this block read `https://<ingest-host>/v1/e` and no document anywhere named the host, which
 read as a documentation gap and was not one: it is what a client does *in the absence of a name*
-that makes it a defect. The snippet already defaulted correctly — `spec/snippet.md` §1 has carried
-`data-endpoint` defaulting to `https://in.jelto.io/v1/e` since v0.1, and §7's CSP names
+that makes it a defect. The snippet already defaulted correctly — its own specification has carried
+`data-endpoint` defaulting to `https://in.jelto.io/v1/e` since v0.1, and its CSP names
 `connect-src in.jelto.io` — so the host was decided and merely written in a surface-specific spec
 rather than in the contract the SDKs are built against. **Both app SDKs therefore had no default at
 all**, and a shipped application, which cannot set an environment variable for itself, sent every
@@ -32,7 +32,7 @@ default won would ignore the endpoint its own test harness handed it and send re
 while its suite reported green.
 
 `<ingest-host>` survives as a placeholder in exactly one case, and it is the reason the explicit
-endpoint exists at all: a customer on a **first-party subdomain** (RFC-0001 §10) serves `/v1/e` on
+endpoint exists at all: a customer on a **first-party subdomain** serves `/v1/e` on
 their own hostname, and their snippet and SDK are configured with it.
 
 An endpoint, explicit or from the environment, MUST be an absolute `http` or `https` URL carrying
@@ -84,7 +84,7 @@ no document names is a branch no client has. Every one of them, with the exact b
 | `413` | `{"error":"too_large"}` | Body over 65 536 bytes (§2). The refusal is on the byte count and happens before the body is parsed, so it names no field |
 | `429` | `{}` + `Retry-After` | Rate limited, per product or per source (§9) |
 | `500` | `{"error":"internal"}` | The server failed before it could answer. The cause is logged, never returned |
-| `503` | `{}` + `Retry-After` | Backpressure — buffer plus spool over their ceiling (RFC-0001 §7.3, §9) |
+| `503` | `{}` + `Retry-After` | Backpressure — buffer plus spool over their ceiling (§9) |
 
 Two `400` bodies exist only under the fixture harness and are listed for completeness rather than
 because a production sender can provoke them: `{"error":"fixture_product_required"}` and
@@ -94,8 +94,8 @@ named here for the same reason the stats API names `fixture_mode_disabled` in it
 error vocabulary — the wrapper fronts the route, so its refusals are part of the route's contract
 even though nothing in production sends the header.
 
-**What a client does with each is already settled and is not restated per row.** RFC-0001 §8.3
-items 8–9 close the set: an SDK retries a network error, a `429` and a `503`, and treats every
+**What a client does with each is already settled and is not restated per row.** The SDK's retry
+rule closes the set: an SDK retries a network error, a `429` and a `503`, and treats every
 other answer as final — including every `400` (`spec/sdk-conformance.md` C9) and `402` (C9b).
 §9 adds the one constraint this revision makes: a retry MUST NOT fire before the `Retry-After`
 the refusal carried.
@@ -130,7 +130,7 @@ exact bytes of each so this table cannot drift from the handler.
 | `n` | MUST | string | `^[a-z0-9_:.-]{1,64}$`. Reserved names in §4. |
 | `t` | SHOULD | **whole number**, ms epoch | Clamped to `[ingest_ts − 30 d, ingest_ts + 5 min]`; outside → `ts = ingest_ts`. Missing → `ingest_ts`. **Every `t` is clamped and none is ever rejected for its magnitude** — not one before the epoch, and not one outside `int64`, which saturates at the `int64` bound and is then clamped like any other. Rejecting a whole event because a device has a wrong clock is data loss, and `spec/sdk-conformance.md` C15 forbids an SDK correcting its own clock, so the sender cannot fix it either. **JSON has no integer type** (RFC 8259 §6), so a *whole number* field is one whose **value** is whole, not one whose **literal** was written without a fraction or an exponent: `1785578400000`, `1785578400000.0` and `1.7855784e12` are the same instant and the server reads all three. A genuine fraction such as `1.5` is `invalid_field`. This rule governs every whole-number field in this document — `t`, `w`, `h`, `e`, `sd` — and the conversion is exact rather than routed through a float64, so a value `int64` can hold is read as written and only a value it cannot hold moves, by saturating rather than rounding. |
 | `s` | MUST | `"web"` \| `"app"` | Selects the field set below. |
-| `props` | MAY | object | ≤ 20 keys; key `^[a-z0-9_]{1,32}$`; values string ≤ 200 chars, number, or boolean. Stored as the value's **JSON text**, unquoted and unrounded: `29.90` is stored `29.90` and never a float, `"29,90"` is stored `29,90`, `true` is stored `true`. The server keeps the text it was sent and nothing derived from it, so a typed column can be added and backfilled from stored rows whenever a value-reading metric is specified (`spec/metrics.md` §4.7 — none exists in v1). Custom and heartbeat keys are discovered per `(product, n)`; other built-ins retain fixed schemas — see §7. |
+| `props` | MAY | object | ≤ 20 keys; key `^[a-z0-9_]{1,32}$`; values string ≤ 200 chars, number, or boolean. Stored as the value's **JSON text**, unquoted and unrounded: `29.90` is stored `29.90` and never a float, `"29,90"` is stored `29,90`, `true` is stored `true`. The server keeps the text it was sent and nothing derived from it, so a typed column can be added and backfilled from stored rows whenever a value-reading metric is specified (none exists in v1). Custom and heartbeat keys are discovered per `(product, n)`; other built-ins retain fixed schemas — see §7. |
 | `i` | MAY | boolean | Interactive. `false` for events fired without user intent (an auto-fired event). Default `true`. A visit with one pageview and an interactive non-pageview event is not a bounce. The server **forces `i = false` on `engagement`** whatever the client sends, so an engagement can never un-bounce a visit. |
 | `v` | SHOULD | string ≤ 32 matching `^[a-z]+/[0-9A-Za-z.+-]{1,24}$` | Client version: `web/1.2.0`, `swift/1.0.3`, `electron/1.0.3`. Counted per version in the Ops card so a bad release is visible. The pattern is **normative** and the server enforces it: a value outside it rejects the event `invalid_field` naming `v`. It is not decoration. `client_ver` is `LowCardinality(String)` in both `events` and `ingest_counters` and nothing folds it the way §4 folds an install-property value, so this grammar is that column's only cardinality guard. It is deliberately narrow — a bare `1.2.0` does not say **which** client shipped it, which is the one thing the Ops card needs in order to name a bad release. **An empty `v` is an absent `v`**, said here rather than left to fall out of the pattern's `{1,24}` tail, exactly as §5.1 `f` and §5.2 `a` say it for themselves. |
 | `l` | MAY | string ≤ 16 | Language: web `navigator.language`; app the OS locale (`en-US`). Stored `LowCardinality`. |
@@ -168,11 +168,11 @@ auto-fired, never counts as a pageview, and carries values that are **totals for
 since it started**, never a delta since the last engagement. The two totals are not the same
 shape: `e` is a monotone accumulation and never decreases, while `sd` is a ratio whose divisor is
 re-measured on every send and so may decrease (§5.1). A pageview therefore produces zero, one or
-several engagement rows, and `spec/metrics.md` §4.1b reduces them per `pv` — `max()` for `e`, the
+several engagement rows, and the metrics reduce them per `pv` — `max()` for `e`, the
 last row for `sd` — so a duplicate, a retry and a lost intermediate row all give the same answer.
 A client MUST NOT send an engagement whose `e` and `sd` both equal the last one it sent for that
 `pv`. Engagement rows are stored, never merged into the pageview row, and never rewrite the
-session's entry, exit, pageview count or bounce flag (RFC §5.3).
+session's entry, exit, pageview count or bounce flag.
 
 `onboarding:<step>` is a reserved **namespace**: `<step>` matches `^[a-z0-9_-]{1,32}$` and needs
 no `event_schema` row — every product may send onboarding steps from day one. The server keeps at
@@ -187,7 +187,7 @@ downgrades; versions are opaque strings. Updates preserve `iid` and never count 
 `id` is required for this event. The server stores it in the app-only `event_id` column so
 analytics can deduplicate repeated transitions beyond the common ten-minute memory window
 and across server restarts. Physical duplicate rows remain possible under at-least-once
-delivery; update completion metrics reduce them by `(install_id, event_id)` (metrics §4.2).
+delivery; update completion metrics reduce them by `(install_id, event_id)`.
 An older server needs this reserved-event support before updated SDKs are deployed; otherwise
 it can reject the event as `unknown_event`. This is an additive wire-v1 event, not a new
 envelope or identity format. Existing SDK state and queued events require no rewrite.
@@ -222,15 +222,15 @@ event is rejected with `unknown_event`.
 | Field | Req | Type | Rule |
 |---|---|---|---|
 | `u` | MUST | **absolute** `http(s)` URL ≤ 2 048 | Page URL. A root-relative path is rejected `invalid_field`: when the request carries no `Origin` header, `u`'s host is what §6's `origin_not_allowed` check reads, and it is the only thing keeping a product's rows on its own domains. A sender that must mask or normalise a path sends an absolute URL whose *path* is masked (`https://site.example/:masked/alfa`) — its own origin is never the secret. Server stores `host`, `path`, and exactly `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`; the rest of the query string is discarded, including every ad click-id **value** (only the parameter *name* is kept, as `click_id`). Fragment handling is `h` below. |
-| `r` | MAY | **absolute** `http(s)` URL ≤ 2 048, or `""` | Referrer. A present `r` MUST be absolute with a non-empty host; the empty string is the only other legal value and means *no referrer*, which is what `document.referrer` reads on a direct visit. A path, a bare host, or any other scheme is rejected `invalid_field` naming `r` — and that rejects **the whole event**, not just the referrer, so a sender holding a referrer it cannot express this way omits the field rather than sending a fragment of one. The reason it cannot be relaxed instead: the server derives `ref_host` from the parsed hostname, which is empty for a path, so a host-less `r` skips the same-product blanking below and stores a bare `ref_path` that `spec/metrics.md` §3's `referrer_url` (`concat(ref_host, ref_path)`) then renders as a referring page belonging to no site. Server stores the hostname (`www.` stripped) **and the path**, trailing slash trimmed, capped at 255 bytes. Query and fragment are discarded, so no click-id value and no referring-site query parameter is ever stored. Same-product hostnames → empty, and then no path either — so a **same-origin referrer sent in full stores nothing at all**, which is why `spec/snippet.md` B1 sends it in full instead of trimming it to a path. |
-| `w` | MAY | whole number (§3) | Screen width in CSS px; `0`–`10000`, outside → `invalid_field`. Stays **MAY**: a sender that has no viewport (a server-side integration) must not have its pageview rejected over one. An absent `w` is `screen_w = 0`, which `spec/metrics.md` §3 renders as its own `unknown` bucket — never as the smallest band. |
+| `r` | MAY | **absolute** `http(s)` URL ≤ 2 048, or `""` | Referrer. A present `r` MUST be absolute with a non-empty host; the empty string is the only other legal value and means *no referrer*, which is what `document.referrer` reads on a direct visit. A path, a bare host, or any other scheme is rejected `invalid_field` naming `r` — and that rejects **the whole event**, not just the referrer, so a sender holding a referrer it cannot express this way omits the field rather than sending a fragment of one. The reason it cannot be relaxed instead: the server derives `ref_host` from the parsed hostname, which is empty for a path, so a host-less `r` skips the same-product blanking below and stores a bare `ref_path` that the `referrer_url` dimension (`concat(ref_host, ref_path)`) then renders as a referring page belonging to no site. Server stores the hostname (`www.` stripped) **and the path**, trailing slash trimmed, capped at 255 bytes. Query and fragment are discarded, so no click-id value and no referring-site query parameter is ever stored. Same-product hostnames → empty, and then no path either — so a **same-origin referrer sent in full stores nothing at all**, which is why the snippet sends it in full instead of trimming it to a path. |
+| `w` | MAY | whole number (§3) | Screen width in CSS px; `0`–`10000`, outside → `invalid_field`. Stays **MAY**: a sender that has no viewport (a server-side integration) must not have its pageview rejected over one. An absent `w` is `screen_w = 0`, which the reports render as its own `unknown` bucket — never as the smallest band. |
 | `h` | MAY | whole number (§3) | `1` when the sender is in hash-routing mode; absent otherwise. When `h = 1` the server appends `#<fragment>` of `u` to the stored `path`. When `h` is **present it decides**, and the product's `hash_routing` setting is ignored for that event; when `h` is absent the server falls back to that setting, which is what a legacy snippet and a server-side sender get. The asymmetry this closes is one-directional and silent: a snippet with `data-hash` against a product whose setting is off had every hash route flattened to one stored `path`, at write time, unrecoverably. |
-| `f` | MAY | string ≤ 200 | Attribution memory (PRD §6.6): the remembered first-touch label in `jl` syntax (`producthunt~social~launch` or `ref:news.ycombinator.com`). Sent only when the snippet runs with `data-memory="on"`. The server ignores it unless the product has memory enabled — and **as of rev 0.21 an ignored `f` is COUNTED**, `ingest_counters.reason = 'memory_ignored'`, on the accepted event, for the reason `vid`'s ignore is counted: the attribute is baked into the tag at paste time (`spec/snippet.md` §1), so a product whose setting is off while `f` keeps arriving is one still writing `jelto_first` into every visitor's `localStorage` behind a published paragraph that denies it. Dropping the label does not reach into the browser. An **empty `f` is an absent `f`** — no label, and no `fd` required — exactly as an empty `r` means no referrer; this is what the parser has always done and rev 0.15 writes it down rather than changing it. |
+| `f` | MAY | string ≤ 200 | Attribution memory: the remembered first-touch label in `jl` syntax (`producthunt~social~launch` or `ref:news.ycombinator.com`). Sent only when the snippet runs with `data-memory="on"`. The server ignores it unless the product has memory enabled — and **as of rev 0.21 an ignored `f` is COUNTED**, `ingest_counters.reason = 'memory_ignored'`, on the accepted event, for the reason `vid`'s ignore is counted: the attribute is baked into the tag at paste time, so a product whose setting is off while `f` keeps arriving is one still writing `jelto_first` into every visitor's `localStorage` behind a published paragraph that denies it. Dropping the label does not reach into the browser. An **empty `f` is an absent `f`** — no label, and no `fd` required — exactly as an empty `r` means no referrer; this is what the parser has always done and rev 0.15 writes it down rather than changing it. |
 | `fd` | MUST if `f` | `YYYY-MM-DD` | Day the label was first stored. Outside `[today − 30 d, today]` → both fields dropped. |
 | `pv` | MUST if `n = engagement` | UUID | The `id` of the `pageview` event this engagement belongs to. Tying engagement to the pageview id rather than to the path keeps two visits to the same path inside one visit apart. An engagement whose `pv` is unknown to the server **is still stored when its visitor has a live session** — the pageview may be in a later batch — and contributes to the metrics of the page in its own `u`. The qualifier is the rule, not a detail: an unknown `pv` is never *by itself* a reason to drop the row, but §6 rejects an engagement whose visitor has no live session as `no_session_for_engagement` **whatever its `pv`**, and the case where the two meet is the one that matters — a long read whose beacon arrives after the 30-minute idle window is dropped, not stored. Executed: with a live session and a `pv` the server has never seen, the row is stored with the `e` and `sd` it carried; with no live session and that same `pv`, the answer is `202 {"rejected":[{"i":0,"reason":"no_session_for_engagement"}]}` and nothing is stored. A matching `pv` also does **not** re-open a closed session — a proposal considered and declined, recorded in the rev 0.17 amendment so it is not re-proposed: re-opening would let a client extend the idle window, which makes the session boundary something the sender controls. |
 | `e` | MUST if `n = engagement` | whole number (§3), ms | Time the page was **visible and focused**, accumulated since the pageview started. Cumulative, not a delta. Clamped to `[0, 1 800 000]` (30 min); **a value outside that range, larger or negative, is clamped and not rejected**. `e` is the only range in this document that clamps instead of rejecting, and deliberately: an over-counted engagement is a browser that lost a visibility event, not a malformed sender, and throwing the pageview's engagement row away to punish it would lose the reading entirely. |
-| `sd` | MUST if `n = engagement` | whole number (§3), 0–100 | The deepest scroll position reached on this pageview, as a percentage of the document height **measured at the moment that beacon was sent**. The numerator is cumulative; the divisor is not. `sd` for one `pv` therefore **MAY decrease** between engagements — a document that grew after a beacon went out makes the next, smaller percentage the more honest one, and `spec/metrics.md` §4.1b keeps the last one rather than the largest. A client MUST NOT hold back a lower `sd` to keep the series non-decreasing. Outside the range → `invalid_field`. |
-| `vid` | MAY | string `^[A-Za-z0-9_-]{22}$` | **Cookie mode only** (`spec/snippet.md` §7). The opaque identifier `jelto.cookie.js` keeps in its first-party cookie: 16 random bytes in base64url, generated in the browser and never derived from anything about the visitor. **The grammar is deliberately one a UUID cannot satisfy**, and that is boundary 2 made checkable rather than trusted: `install_id` is a UUID (§5.2), so an `install_id` cannot be *placed* in this field at all — no length, no alphabet and no dash position of a UUID matches — and the one identifier the decision forbids meeting this one is excluded by reading the grammar rather than by auditing a derivation. The server **never stores the value**. It derives `visitor_id = sipHash-2-4("jelto-cookie-v1" ‖ product_id(le64) ‖ vid)`, domain-separated by construction from the cookieless `visitor_id` (which is salted daily and rotates, `RFC:123`) and from the app surface's `cityHash64(install_id)` (§5.2, a different hash function over a different domain). It carries **no daily salt**, which is the entire point: a cookie that survives midnight is what makes a multi-day visitor one visitor, and it is why cookie mode's `visitors` can be strictly less than the sum of its own per-day `visitors` where the cookieless mode's is equal to it by construction. **Ignored unless the product has cookie mode enabled**, exactly as `f` is ignored unless memory is enabled — an ignored `vid` leaves the row's `visitor_id` at the daily salted hash, and the event is stored, never rejected. Being ignored is **counted and not silent**: a `vid` on a product whose mode is off means a cookie is being set in a real visitor's browser on a site whose published privacy paragraph says none is, so it increments `ingest_counters` under the reason `cookie_id_ignored` — an open `LowCardinality(String)` that costs no migration. This sentence read *"Unlike `f`, being ignored is counted"* through rev 0.20; **`f` is counted too as of rev 0.21** (`memory_ignored`), and the asymmetry it named is retired rather than merely unmentioned. That is the under-disclosure direction and it is the one this field's handling is designed around. **The cookie build sends `vid` on every web event and `jelto.js` cannot emit one under any configuration**, which is the property that makes *"is this product running the cookie build"* a fact **derivable from the rows themselves**. Nothing stores that answer: it is a read over `events`, so a customer who reverts to `jelto.js` stops being in cookie mode as soon as their next web event lands, with no job to run and no column to go stale. |
+| `sd` | MUST if `n = engagement` | whole number (§3), 0–100 | The deepest scroll position reached on this pageview, as a percentage of the document height **measured at the moment that beacon was sent**. The numerator is cumulative; the divisor is not. `sd` for one `pv` therefore **MAY decrease** between engagements — a document that grew after a beacon went out makes the next, smaller percentage the more honest one, and the metrics keep the last one rather than the largest. A client MUST NOT hold back a lower `sd` to keep the series non-decreasing. Outside the range → `invalid_field`. |
+| `vid` | MAY | string `^[A-Za-z0-9_-]{22}$` | **Cookie mode only**. The opaque identifier `jelto.cookie.js` keeps in its first-party cookie: 16 random bytes in base64url, generated in the browser and never derived from anything about the visitor. **The grammar is deliberately one a UUID cannot satisfy**, and that is boundary 2 made checkable rather than trusted: `install_id` is a UUID (§5.2), so an `install_id` cannot be *placed* in this field at all — no length, no alphabet and no dash position of a UUID matches — and the one identifier the decision forbids meeting this one is excluded by reading the grammar rather than by auditing a derivation. The server **never stores the value**. It derives `visitor_id = sipHash-2-4("jelto-cookie-v1" ‖ product_id(le64) ‖ vid)`, domain-separated by construction from the cookieless `visitor_id` (which is salted daily and rotates) and from the app surface's `cityHash64(install_id)` (§5.2, a different hash function over a different domain). It carries **no daily salt**, which is the entire point: a cookie that survives midnight is what makes a multi-day visitor one visitor, and it is why cookie mode's `visitors` can be strictly less than the sum of its own per-day `visitors` where the cookieless mode's is equal to it by construction. **Ignored unless the product has cookie mode enabled**, exactly as `f` is ignored unless memory is enabled — an ignored `vid` leaves the row's `visitor_id` at the daily salted hash, and the event is stored, never rejected. Being ignored is **counted and not silent**: a `vid` on a product whose mode is off means a cookie is being set in a real visitor's browser on a site whose published privacy paragraph says none is, so it increments `ingest_counters` under the reason `cookie_id_ignored` — an open `LowCardinality(String)` that costs no migration. This sentence read *"Unlike `f`, being ignored is counted"* through rev 0.20; **`f` is counted too as of rev 0.21** (`memory_ignored`), and the asymmetry it named is retired rather than merely unmentioned. That is the under-disclosure direction and it is the one this field's handling is designed around. **The cookie build sends `vid` on every web event and `jelto.js` cannot emit one under any configuration**, which is the property that makes *"is this product running the cookie build"* a fact **derivable from the rows themselves**. Nothing stores that answer: it is a read over `events`, so a customer who reverts to `jelto.js` stops being in cookie mode as soon as their next web event lands, with no job to run and no column to go stale. |
 
 ### 5.2 `s = "app"`
 
@@ -266,7 +266,7 @@ even if the host now supplies a hint. `reset()` rotates the SDK identity with or
 `unknown`: it cannot establish a new app installation. Disable followed by a new init
 can capture that init's hint for its new claim. Do not backdate `t`, change claim timing, replay onboarding, or
 attach this property to heartbeats. `existing` does not age into `new` or a numeric age bucket.
-RFC §5.2/§8.2 and metrics §4.2d define storage and the resulting reads.
+The server defines storage and the resulting reads.
 
 Deploy server/schema/storage/read support before SDK initialization options and host
 adoption. Older servers need not accept this reserved property. Historical omissions stay
@@ -278,9 +278,9 @@ An `install` event carries no attribution payload of any kind — only the commo
 and its reserved origin property. The
 server treats an `install` for an `install_id` that already has an `installs` row, within 30 days,
 as a **reinstall**: the row is stored in `events` with `is_reinstall = true` and is excluded from
-the **`installs` table** (`installs_mv` filters `is_reinstall = false`, RFC §5.2) and from
-`new_installs_by_day` (`spec/metrics.md` §4.2 filters `is_reinstall = 0`). It is **not** excluded
-from the `installs` **metric** — a reinstall is an install (`spec/metrics.md` §4.2, §9), which is
+the **`installs` table** (`installs_mv` filters `is_reinstall = false`) and from
+`new_installs_by_day` (which filters `is_reinstall = 0`). It is **not** excluded
+from the `installs` **metric** — a reinstall is an install, which is
 why the fixture's `installs` is `ok 5` while `new_installs_by_day` sums to 4. This behaviour is
 independent of attribution and unaffected by its removal.
 
@@ -303,9 +303,9 @@ Processing is per event. The envelope is accepted (`202`) even if every event is
 | `duplicate` | `id` seen within 10 minutes (silently counted; not returned unless `?debug=1`) |
 | `spam_referrer` | web event whose referrer host is on `spec/signatures/referrer-spam.txt` |
 | `page_blocked` | web event whose `path` matches the product's page blocklist (Settings › Shields) |
-| `attack_throttled` | eligible web event exceeding additional active attack-mode limits; counted once, with no stop instruction (spec/product-expansion.md §5) |
+| `attack_throttled` | eligible web event exceeding additional active attack-mode limits; counted once, with no stop instruction |
 | `country_blocked` | event whose resolved country is on the product's country blocklist |
-| `no_session_for_engagement` | an `engagement` whose visitor has no live session (RFC §5.3) — the page was open longer than the 30-minute idle window, or the session was lost to a crash. Counted in Ops; never stored, so it can never create a session of its own. |
+| `no_session_for_engagement` | an `engagement` whose visitor has no live session — the page was open longer than the 30-minute idle window, or the session was lost to a crash. Counted in Ops; never stored, so it can never create a session of its own. |
 | `stopped` | product or platform kill switch active; the response also carries `stop` |
 
 Rejections are counted per `(product, reason)` and surfaced in the Ops card. They are never
@@ -313,7 +313,7 @@ stored as events. **Everything the server drops from the moment it knows whose i
 counted** — including the whole-request drops that never reach per-event processing: a
 product-scoped `429` and a backpressure `503` each add `len(e)` to the reasons `throttled` and
 `backpressure` (§9). A drop that no counter records is a traffic dip the customer reads as a real
-decline, and `spec/snippet.md` B11 names the Ops card as the snippet's only diagnostic channel.
+decline, and the Ops card is the snippet's only diagnostic channel.
 
 **Before that moment, nothing can be, and that is the whole of the exemption.** It is stated as a
 class rather than as a list of cases because every member has one cause: `ingest_counters` is
@@ -351,7 +351,7 @@ a mistake costs a label rather than a row. The reason value itself stays in this
 are durable, and the pipeline is **at-least-once**: `internal/ingest` retries a failed insert,
 spools on failure, and re-drains a spool file whose delete did not complete. Duplicates from those
 paths are suppressed in ClickHouse by `insert_deduplication_token` = the batch id, stable across
-every retry and carried across the spool as the file name (RFC §7.2). `id`'s 10-minute window
+every retry and carried across the spool as the file name. `id`'s 10-minute window
 (§3) is a separate, process-local defence against a *client* resending; it does not cover replay
 and must not be relied on for it. A client MUST NOT treat a lost `202` as a reason to alter the
 `id`s in the batch it resends.
@@ -448,7 +448,7 @@ reason.
 
 The re-check was a `MAY` through rev 0.16 and nothing else in the contract treated it as optional.
 `spec/sdk-conformance.md` C16 **asserts** it — "at ~60 s one `heartbeat`, then the queue drains" —
-and RFC-0001 §8.6 item 16 states it flat: "The SDK re-checks by sending one heartbeat after
+and the SDK rule behind it states it flat: "The SDK re-checks by sending one heartbeat after
 `until`". A wire-conformant SDK that simply drained its queue therefore failed C16 while breaking
 no rule this document had, and the wire moved onto the test rather than the other way round. The
 narrowing had to land before the freeze; after it, the only repair would have been a second field.
@@ -462,7 +462,7 @@ event would have told it. Executed: two events sent under an active switch answe
 and added `stopped = 2` to `ingest_counters`; an `install` sent to the same product on the app
 surface, against a `web`-scoped switch, was `202 {}` and stored (C16b).
 
-A web client has no `heartbeat` to send and no queue to retry from — `spec/snippet.md` B7 halts on
+A web client has no `heartbeat` to send and no queue to retry from — the snippet halts on
 `stop.until` and has no retry at all — so for it the switch is simply a period of not sending, and
 it resumes with the next pageview. A `stop` never carries `Retry-After` and a `429`/`503` never
 carries `stop`: they are separate channels, and §9 governs the other one.
@@ -512,9 +512,9 @@ User-Agent enters the hash only.
 Both limits and the backpressure `503` are **counted** as `ingest_counters` reasons — `throttled`
 for the product bucket, `backpressure` for the `503` — so a customer whose launch crossed the cap
 sees it on the Ops card instead of reading a plateau as the launch fizzling. The web snippet
-cannot act on a `429` (`spec/snippet.md` B7 has no retry, B11 swallows the error), so for web the
+cannot act on a `429` (the snippet has no retry and swallows the error), so for web the
 status code is not the diagnostic; the counter is. The status code stays `429`/`503` rather than a
-counted `202`, because an app SDK **can** retry (RFC §7.3) and turning the refusal into an
+counted `202`, because an app SDK **can** retry and turning the refusal into an
 acknowledgement would make it discard events it could have resent. The pre-parse per-source drop
 has no product to attribute and is left to process metrics.
 
@@ -539,7 +539,13 @@ has no product to attribute and is left to process metrics.
   milestone itself. The date holds or moves on evidence of when such a build actually ships, never
   on preference for a shorter or longer window to add a field.
 
-## Amendments to RFC-0001
+## Amendments
+
+- 2026-11-11, editorial, carrying no revision of its own: **removed references to non-public
+  documents; no requirement changed.** Where a citation backed a rule, the rule is now stated in
+  words or points at this document, `spec/sdk-conformance.md` or `spec/wire-v1.schema.json`. No
+  field, status, number, MUST, SHOULD or example moved, the schema's validation is untouched, and
+  the document stays at rev 0.26.
 
 - rev 0.26: **the client bounds `stop.until` to 30 days from receipt** (§8) — *every app SDK; no
   server, schema or snippet change, and the freeze is not in play.* Through rev 0.25 a `stop`
@@ -587,7 +593,7 @@ has no product to attribute and is left to process metrics.
   direction, and severity is an argument about how bad a thing is, never about whether it can be
   seen.** A discarded value leaves no row — that is what made both facts invisible — so both leave a
   counter instead. `memory_ignored` rides an ACCEPTED event alongside `cookie_id_ignored` and is
-  excluded from the Ops card's rejections for the same reason (`spec/metrics.md` §4.6).
+  excluded from the Ops card's rejections for the same reason.
 
 - rev 0.20: **`vid` becomes a field — the reserved name is spent** (§5.1, §10) —
   *the snippet's cookie mode, and the product decision behind it.* **This spends the insurance
@@ -621,7 +627,7 @@ has no product to attribute and is left to process metrics.
   **Executed, unlike rev 0.18.** This revision is *not* specified ahead of its implementation: the
   parser reads the field, the schema constrains it, `spec/wirecheck`'s census knows it, and the
   Go/schema agreement corpus carries mutants for it. What is **not** here is the sender — `jelto.cookie.js`
-  is a separate build on its own budget (spec/snippet.md §7 boundary 1) and is not this document's to ship.
+  is a separate build on its own budget and is not this document's to ship.
 
 - rev 0.19: **the production ingest host is named** (§1) — *the snippet's install block and cookie mode,
   and the M3 exit criterion.* This is an
@@ -693,7 +699,7 @@ has no product to attribute and is left to process metrics.
 
   **W6, first half — §8's `MAY` was the outlier, so the wire moved onto the test.**
   `spec/sdk-conformance.md` C16 **asserts** the post-`until` heartbeat ("at ~60 s one `heartbeat`,
-  then the queue drains") and RFC-0001 §8.6 item 16 states it flat, while §8 said a client "MAY
+  then the queue drains") and the SDK rule behind it states it flat, while §8 said a client "MAY
   retry with one `heartbeat` afterwards". A wire-conformant SDK that simply drained its queue
   failed C16 while breaking no rule this document had — three artifacts, one of them permissive,
   and it was the permissive one that was wrong. §8 now requires the first request after `until` to
@@ -704,7 +710,7 @@ has no product to attribute and is left to process metrics.
   and added `stopped = 2` to `ingest_counters`, while an `install` on the app surface against the
   same switch was `202 {}` and stored (C16b). A client draining a thousand queued events spends
   the backlog and writes a thousand Ops-card rows to learn what one event tells it. A web client
-  has no `heartbeat` and no retry (`spec/snippet.md` B7), so for it the switch is only a pause.
+  has no `heartbeat` and no retry, so for it the switch is only a pause.
 
   **W6, second half — `Retry-After` and C8's backoff are one rule now, not two that can
   disagree.** §9 advertised the header and required nothing of the client; C8 gives a
@@ -778,7 +784,7 @@ has no product to attribute and is left to process metrics.
   re-opening would let a client extend the idle window at will, which makes the session boundary
   **something the sender controls** rather than something the server measures. Every session-scoped
   number — visits, bounce rate, visit duration, entry and exit page — would then be a figure a
-  well-meaning SDK bug or a hostile sender could move, and `spec/metrics.md` §5 has no state that
+  well-meaning SDK bug or a hostile sender could move, and no metric state
   can flag a number that is merely *stretched*. The reading is lost; the boundary is kept.
 
   **W13 — "everything the server drops is counted" had more than the one exemption §9 names, and
@@ -890,7 +896,7 @@ has no product to attribute and is left to process metrics.
   for `Paid` was **0 out of a denominator of 4**. That is a true `0 %` the customer cannot
   distinguish from a real one, and because the query *succeeds* it is below the level any
   metric state can reach. The account API gains the pattern **and** the CHECK
-  narrows (migration `20260831140000`, Postgres, goose): api.yaml alone would have been a rule
+  narrows (migration `20260831140000`, Postgres, goose): the API schema alone would have been a rule
   nothing executes, since no PATCH handler exists yet, and this repo reserves "CHECK as backstop
   only" for *array* columns whose NULL and empty entries a per-row regex structurally cannot see —
   every scalar column here states its real grammar. The Postgres store now reads the grammar off
@@ -994,7 +1000,7 @@ has no product to attribute and is left to process metrics.
   **W1.** `internal/ingest/wire/wire.go` has always required `r` to be an absolute `http(s)` URL
   with a non-empty host, and rejects the **whole pageview** `invalid_field` when it is not. §5.1
   said only "URL string ≤ 2 048" and `spec/wire-v1.schema.json` enforced only `maxLength`, so
-  `spec/snippet.md` B1 and B18 were free to specify — and did specify — that a same-origin
+  the snippet's specification was free to specify — and did specify — that a same-origin
   referrer is "sent as path-only so the server never stores the host". Nothing had ever executed
   the three together, because `web/snippet/` does not exist; the first internal navigation on a
   customer's site would have lost its pageview outright, and the customer would have read the
@@ -1024,7 +1030,7 @@ has no product to attribute and is left to process metrics.
   **The schema needed an edit this time, and rev 0.12 and 0.13 did not.** Those two changed
   nothing executable; these two change what is accepted, and `spec/wire-v1.schema.json` is loaded
   by the server's agreement test and by every conformance run (`spec/sdk-conformance.md` W1,
-  `spec/snippet.md` T22), so a rule left out of it is a rule nothing checks. It is brought into
+  and the snippet's own suite), so a rule left out of it is a rule nothing checks. It is brought into
   agreement at rev 0.14, from the rev 0.11 the rev 0.13 entry recorded: `r` takes
   `#/$defs/referrer` (`""` or an absolute `http(s)` URL — the empty string is legal and
   the fixture corpus sends it), and `id` and `iid` take a new `#/$defs/nonNilUuid`. `pv` is
@@ -1036,23 +1042,23 @@ has no product to attribute and is left to process metrics.
   it.
   **What pinning `r` to `http(s)` does not foreclose.** `android-app://com.reddit.frontpage` is a
   referrer Chrome on Android really produces, and Plausible accepts the scheme and maps the package
-  back to a source. Jelto does not, and a visit from a native app is counted as direct
-  (`spec/snippet.md` §2 records the limit). Accepting a third scheme later **widens** what the
+  back to a source. Jelto does not, and a visit from a native app is counted as direct.
+  Accepting a third scheme later **widens** what the
   server takes; it breaks no sender that was conformant under this revision, which is the only
   thing §10's "a change that would break an existing client is a new path" protects against. So the
   freeze locks the narrowing in, not the widening out — and the narrowing is the half that had to
   land now, because it is what stops the snippet being written to a rule the server rejects.
 
-- rev 0.13: **`vid` reserved for the opt-in cookie mode** (§10) — *`spec/snippet.md` §7.*
+- rev 0.13: **`vid` reserved for the opt-in cookie mode** (§10) — *the snippet's cookie mode.*
   The original sequencing decision said the one thing to do before the freeze was to keep the wire
   from foreclosing cookie mode. Checked against this document, **it does not foreclose it**, and
   recording that is the point of this entry: §10's first two lines already permit an append, §10's
   third line already promises that unknown fields are ignored rather than rejected, and **nothing
   in this document asserts that a web identifier is never client-supplied** — that sentence lives
-  in RFC-0001 §2, which is amendable and not frozen. So a `vid` field can be appended at M4 with
+  in a design document outside this contract, which is amendable and not frozen. So a `vid` field can be appended at M4 with
   no more cost than any other append, and adding an inert one now would be specifying a field for
   a feature whose shape is three milestones from being designed.
-  **(2026-09-02: that append is now M3, not M4 — PRD v0.12 moved the mode. This entry keeps its
+  **(2026-09-02: that append is now M3, not M4 — the product plan moved the mode. This entry keeps its
   original wording because it is the record of what rev 0.13 decided, and the correction carries
   no revision of its own: the contract did not change. §10 permitted the append before the freeze
   and permits it now, on the same terms and at the same cost; only the date moved, and a date is
@@ -1075,8 +1081,8 @@ has no product to attribute and is left to process metrics.
   it is not itself monotone. Requiring it never to decrease made the *stale* percentage the
   contractual one — a document that grew after a beacon went out kept the older, higher number
   and no honest later value could displace it, on a product whose one promise is that no number
-  is shown unless it is true (`spec/metrics.md` §5). `spec/metrics.md` §4.1b changes its
-  reduction to match, and `spec/snippet.md` B17 drops the clamp that was upholding the old rule.
+  is shown unless it is true. The metrics change their
+  reduction to match, and the snippet drops the clamp that was upholding the old rule.
   `e` is unaffected and keeps `max()`: engaged time has no divisor.
 
 - rev 0.11: **numeric prop values keep the string column** (§3 `props`) — *reference audit F61,
@@ -1086,9 +1092,9 @@ has no product to attribute and is left to process metrics.
   the verbatim JSON literal — `29.90` stays `29.90` and `1e20` stays `1e20`, neither one rounded
   through a float. So `events.props` is lossless with respect to the wire, a typed column can be
   derived from stored rows at any later date, and this is **not** one of the columns that had to
-  land while the tables were empty. `RFC-0001` §11 records why neither reference's route was
-  taken; `spec/metrics.md` §4.7 closes the catalog against value-reading metrics and fixes the
-  read shape for the day one is added. The trap the finding names is real and was reproduced on
+  land while the tables were empty. Neither reference's route was
+  taken; the metric catalog is closed against value-reading metrics, with the
+  read shape fixed for the day one is added. The trap the finding names is real and was reproduced on
   24.8.14.39 — `toFloat64OrZero` returns `0` for `29,90`, `$29.90` and `''` — but it is a *read*
   expression, and a server guard test now fails the build if it is written.
 
@@ -1099,7 +1105,7 @@ has no product to attribute and is left to process metrics.
 
   **Accepted.**
 
-  1. **`h`, hash routing (§5.1)** — *tracker-snippet-1.* Confirmed: `spec/snippet.md` B1 sends the
+  1. **`h`, hash routing (§5.1)** — *tracker-snippet-1.* Confirmed: the snippet sends the
      fragment only under `data-hash`, and `internal/ingest/enrich.go:142` appends it only under the
      product's `hash_routing` column. The mismatch is one-directional — snippet on, product off —
      and it flattens every hash route to one stored `path` at write time, silently, with nothing
@@ -1125,13 +1131,13 @@ has no product to attribute and is left to process metrics.
      reads three. No wire field is needed — `u` already carries them — so this is the freeze
      pinning what is kept, and the storage work is tracked below.
   4. **`w` stays MAY, with the unknown bucket named (§5.1)** — *ua-device-parsing-3.* Confirmed
-     (and already on record as V10): `spec/metrics.md` §3 buckets `<576 mobile`, so an absent `w`
+     (and already on record as V10): the screen dimension buckets `<576 mobile`, so an absent `w`
      is `screen_w = 0` and reads as a phone. That is a read-side defect with a read-side fix, and
      the row now says so rather than leaving the repair unstated at the freeze.
   5. **What a `202` promises (§3 `id`, §6)** — *ingest-robustness-1.* The duplication itself was
      confirmed and fixed before this triage (V2, `insert_deduplication_token`), but the contract
      never stated its own delivery semantics: `grep -rn 'at-least-once|at-most-once|idempot'` over
-     `spec/`, the RFC and the PRD returned nothing, and §3's `id` row read as though the 10-minute
+     `spec/` and the design documents returned nothing, and §3's `id` row read as though the 10-minute
      window were the replay defence. It is process-local memory in the HTTP handler. SDK authors
      build retry logic against this document; it now says at-least-once and names the real defence.
   6. **Every drop is counted; the per-source bucket is keyed and scoped (§6, §9)** —
@@ -1168,7 +1174,7 @@ has no product to attribute and is left to process metrics.
      fallback is the only thing keeping a product's rows on its own domains. Relaxing the type
      would trade a real guard for a capability that already exists. The client-side half of that
      finding — `data-auto-pageview="off"` and a first-class `jelto('pageview', {u})` — is a
-     `spec/snippet.md` M2 decision with no wire impact and is not blocked by the freeze.
+     snippet decision for M2 with no wire impact and is not blocked by the freeze.
   10. **Narrowing web `t` to a short past window** — *identity-sessionization-2.* The defect behind
       it is real and confirmed: `session.go:249` `Sweep` compares **server** wall time against
       `Last.End`, which comes from the client's `t` (`enrich.go:192`), while `Feed` (`:154`)
@@ -1190,7 +1196,7 @@ has no product to attribute and is left to process metrics.
       rotated tablet from a laptop, but `events.device` already carries the form factor from the
       UA, and once `screen`'s labels describe width bands instead of device names — the V10 repair —
       nothing is left inferring a device from a width. Adding a field for a dimension no spec
-      defines is the "materialized view because it will be needed" pattern CLAUDE.md rejects, and
+      defines is the "materialized view because it will be needed" pattern the backend rejects, and
       the snippet's 1 800 B budget is real. Recorded with its cost stated plainly: after the freeze
       this cannot be added, and `h` is now taken, so the name would have to differ.
   13. **The trusted-IP-header startup check** — *geo-location-1.* Already fixed in `dd91844`
@@ -1201,13 +1207,13 @@ has no product to attribute and is left to process metrics.
       it for "no database configured", so three different facts store one value and the Locations
       card can print `(not set) 100 %` as a measured distribution. The finding's own fix needs no
       events column — `ingest_counters.reason` is an open `LowCardinality(String)` and
-      `spec/metrics.md` §5 is where the state belongs — so none of it is gated on the freeze.
+      the metric states are where the state belongs — so none of it is gated on the freeze.
   15. **`(gclid)` medium keyed on the resolved source** — *referrer-source-classification-2.*
       Confirmed: `enrich.go:159` requires `row.UTMSource == "google"`, so Google auto-tagging (no
-      UTM params, referrer `www.google.com`, `?gclid=…`) never takes the branch, and RFC §4.1:157
-      says "the source", which includes the referrer-derived one. Write-time enrichment on a stored
+      UTM params, referrer `www.google.com`, `?gclid=…`) never takes the branch, and the classification
+      rule says "the source", which includes the referrer-derived one. Write-time enrichment on a stored
       column, no wire field involved. Worth noting the finding's preferred fix — derive the medium
-      on read — is the one that matches RFC §4.1's own on-read rule.
+      on read — is the one that matches this project's own on-read rule (§6).
   16. **A `hostname` dimension, and `host` on `sessions`** — *feature-surface-2, schema-storage-3.*
       Confirmed: `20260828090400_sessions.sql` has no host column of any kind, while `events` has
       one; a product may own 20 domains, so `visits`, `bounce_rate`,
@@ -1216,7 +1222,7 @@ has no product to attribute and is left to process metrics.
       Time-critical for a different reason, below.
 
   **Confirmed, not wire, and not to be lost.** Nothing here is blocked by the freeze, but three
-  items are time-critical because the ClickHouse tables are still empty and CLAUDE.md's add-only
+  items are time-critical because the ClickHouse tables are still empty and the backend's add-only
   rule makes a late column indistinguishable from a genuine blank forever — the argument
   `20260828090400_sessions.sql:3-10` already makes for `ua` and `screen_w`, applied to: `host` (and
   `exit_host`) on `sessions`; `utm_content` / `utm_term` on `events` and `sessions`; `ref_path` on
@@ -1231,25 +1237,25 @@ has no product to attribute and is left to process metrics.
   stands: the text wins, and the schema is fixed alongside the parser when `h` lands.
 
 - rev 0.9: **`engagement` event** with `pv`, `e`, `sd` (§4, §5.1) and the rejection reason
-  `no_session_for_engagement` (§6). Serves `engagement_time` and `scroll_depth`
-  (`spec/metrics.md` §4.1b), which replace the retired `visit_duration`. Landed **before** the
+  `no_session_for_engagement` (§6). Serves `engagement_time` and `scroll_depth`,
+  which replace the retired `visit_duration`. Landed **before** the
   end-of-M1 freeze on purpose: the metrics ship in M2, but appending a reserved event name and
   three fields after the freeze would cost a wire revision for nothing. Cumulative-not-delta and
   server-forced `i = false` are the two rules that make it safe.
 - rev 0.8: §5.3 wording fix — a reinstall is excluded from the `installs` *table* / `installs_mv`
   and from `new_installs_by_day`, never from the `installs` *metric*. No wire change; no schema
   change.
-- v0.7: removed `prov` (`m`/`u`/`r`/`st`) and the app-side attribution pipeline it fed (RFC §4.2,
-  §8.4); reinstall detection now uses `is_reinstall` on the install row instead of
+- v0.7: removed `prov` (`m`/`u`/`r`/`st`) and the app-side attribution pipeline it fed;
+  reinstall detection now uses `is_reinstall` on the install row instead of
   `attr_method = 'reinstall'` (§5.3). OS-level download → install
   attribution is off the roadmap for now.
-- §4.2 cohort universe: also includes `ref:<host>` for every `ref_host` observed in the product's
+- Cohort universe: also includes `ref:<host>` for every `ref_host` observed in the product's
   web pageviews in the last 90 days, so a `jl=ref:news.ycombinator.com` claim is accepted when the
   site has actually received Hacker News traffic.
 - v0.6: `a` (app slug) on app events; heartbeat may carry install properties (`license` reserved).
-- v0.5: reserved `onboarding:<step>` namespace with fixed `status` / `reason` props (PRD §7.4).
+- v0.5: reserved `onboarding:<step>` namespace with fixed `status` / `reason` props.
 - v0.4: `f`, `fd` web fields; download links may carry `jt=first` beside `jl` when the label came
-  from attribution memory. RFC §2.3 holds the `jl` grammar.
+  from attribution memory.
 - v0.3: the server also reads `ref`, `source`, `via` from `u` into
   `utm_source` when `utm_source` is absent. No wire change.
 - v0.2: `i`, `v`, `l` fields; rejection reasons

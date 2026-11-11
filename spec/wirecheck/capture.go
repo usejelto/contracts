@@ -27,7 +27,7 @@ const (
 	// KindBatchDropped identifies a whole-batch 400/402. Envelope failures may occur
 	// before product resolution and therefore have no attributable server counter.
 	KindBatchDropped
-	// KindFlushGaveUp is data lost at process exit (RFC-0001 §8.3 item 7).
+	// KindFlushGaveUp is data lost at process exit (the flush is best effort).
 	KindFlushGaveUp
 	// KindOperational is a retry, a kill switch, a backoff note. Not a loss.
 	KindOperational

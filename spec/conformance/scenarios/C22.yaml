@@ -3,7 +3,7 @@ title: install properties are persisted, resolved at send, and a change sends a 
 implements: spec/sdk-conformance.md §4 C22
 notes: |
   C22's last clause -- "the next-process heartbeat still carries both
-  (persisted)" -- needs a UTC day to have turned. RFC-0001 §8.2 item 3 sends a
+  (persisted)" -- needs a UTC day to have turned. §3.2's heartbeat rule sends a
   heartbeat only when `last_heartbeat_day != today`, and C3 asserts in as many
   words that "a third init on the same day sends none". A new process on the
   same day therefore sends no heartbeat at all and there is nothing for the

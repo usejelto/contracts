@@ -7,11 +7,11 @@ notes: |
   halves of this row want evidence of attempts.
 
   "no further attempts" is read narrowly, as "no further install EVENT is
-  enqueued", because that is the only reading any rule supports. RFC-0001 §8.2
-  item 4 says what marking claimed stops -- enqueueing a second install -- and
+  enqueued", because that is the only reading any rule supports. The install-claim
+  rule says what marking claimed stops -- enqueueing a second install -- and
   nothing anywhere says a queued event is discarded because a timer expired.
   The queued copy therefore keeps being offered with the rest of the batch,
-  which is §8.3 item 8 doing its job. Arm B asserts the narrow reading: the
+  which is the retry rule doing its job. Arm B asserts the narrow reading: the
   claim is marked, and the queue still holds exactly ONE install.
 arms:
   - name: retried on each of three launches

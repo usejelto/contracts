@@ -5,7 +5,7 @@ notes: |
   `hangup` rather than `down`: mockd's doc.go says a refused connection is
   never recorded, so an arm run against `down` cannot show that the SDK tried
   at all. `hangup` accepts, records, then closes without answering -- a network
-  error either way under RFC-0001 §8.3 item 8. It also lets this arm assert
+  error either way under C8's retry rule. It also lets this arm assert
   what C6 leaves implicit, that the events really were offered and really were
   refused.
 

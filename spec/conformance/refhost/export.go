@@ -9,24 +9,24 @@ import (
 // of storage format. Omit BackoffFails: it is recomputable host bookkeeping,
 // not a required persisted fact.
 type Export struct {
-	InstallID      string `json:"install_id"` // §8.2 item 2; "" before init and after disable()
+	InstallID      string `json:"install_id"` // C2; "" before init and after disable()
 	LastAppVersion string `json:"last_app_version,omitempty"`
 
-	LastHeartbeatDay string `json:"last_heartbeat_day,omitempty"` // §8.2 item 3, floor(ms / 86 400 000)
+	LastHeartbeatDay string `json:"last_heartbeat_day,omitempty"` // C3, floor(ms / 86 400 000)
 
 	InstallOrigin   string            `json:"install_origin,omitempty"`    // wire §5.2; frozen with the claim
-	InstallClaimed  bool              `json:"install_claimed"`             // §8.2 item 4
-	InstallDueAt    string            `json:"install_due_at,omitempty"`    // §8.2 item 4's deadline, not a countdown (C4c)
-	InstallFirstTry string            `json:"install_first_try,omitempty"` // §8.2 item 4's 30-day window (C4b)
-	InstallProps    map[string]string `json:"install_props,omitempty"`     // §8.1 setProps (C22, C22d)
+	InstallClaimed  bool              `json:"install_claimed"`             // C4, C4b
+	InstallDueAt    string            `json:"install_due_at,omitempty"`    // the install deadline, not a countdown (C4c)
+	InstallFirstTry string            `json:"install_first_try,omitempty"` // the install claim's 30-day window (C4b)
+	InstallProps    map[string]string `json:"install_props,omitempty"`     // setProps (C22, C22d)
 
-	BackoffStepMS int64  `json:"backoff_step_ms,omitempty"` // §8.3 item 8; 0 or absent means "not in backoff"
-	BackoffNextAt string `json:"backoff_next_at,omitempty"` // §8.3 item 8; a step does not say WHEN (C8c)
+	BackoffStepMS int64  `json:"backoff_step_ms,omitempty"` // C8; 0 or absent means "not in backoff"
+	BackoffNextAt string `json:"backoff_next_at,omitempty"` // C8; a step does not say WHEN (C8c)
 
-	StopUntil    string `json:"stop_until,omitempty"`     // §8.6 item 16 and wire §8 (C16)
+	StopUntil    string `json:"stop_until,omitempty"`     // wire §8 (C16)
 	StopProbeDue bool   `json:"stop_probe_due,omitempty"` // wire §8's single-heartbeat probe, owed across a relaunch
 
-	Queue QueueExport `json:"queue"` // §8.3 item 6 (C6, C4b, C18)
+	Queue QueueExport `json:"queue"` // the capped queue (C6, C4b, C18)
 }
 
 // QueueExport is §3.2's `queue`: what the SDK is holding, oldest first, and how
@@ -56,7 +56,7 @@ func (s *SDK) Export() Export {
 	started, ready := s.started, s.ready
 	s.mu.Unlock()
 	if started && ready != nil {
-		// init is asynchronous (§8.2 item 1), so a `dumpstate` that overtook
+		// init is asynchronous (C1), so a `dumpstate` that overtook
 		// bootstrap would read a state the SDK has not finished loading and
 		// report facts it does in fact hold as absent. This waits for the load
 		// `init` already started; it starts none, and before `init` there is

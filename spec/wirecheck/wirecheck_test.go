@@ -91,8 +91,8 @@ func TestClassifyCoversTheWholeSDKVocabulary(t *testing.T) {
 		// Not client-side losses.
 		{`jelto: POST {"v":1,"p":"prd_conform001","e":[]}`, KindPost},
 		{`jelto: event 2 rejected: prop_not_allowlisted (email) (spec/wire-v1.md §6)`, KindServerRejection},
-		{`jelto: batch dropped: status=400 -- final, not retried (RFC-0001 §8.3 items 8-9, spec/wire-v1.md §2a)`, KindBatchDropped},
-		{`jelto: termination flush gave up with 12 events queued (best effort, RFC-0001 §8.3 item 7)`, KindFlushGaveUp},
+		{`jelto: batch dropped: status=400 -- final, not retried (spec/wire-v1.md §2a)`, KindBatchDropped},
+		{`jelto: termination flush gave up with 12 events queued (best effort)`, KindFlushGaveUp},
 		{`jelto: retry in 1043 ms (backoff governs; step was 1000 ms, refusal 1) status=503`, KindOperational},
 		{`jelto: kill switch: no request until 1785578400000 ms, scope all (spec/wire-v1.md §8)`, KindOperational},
 		{`jelto: ignoring a stop scoped to web (spec/wire-v1.md §8; this client is s=app)`, KindOperational},

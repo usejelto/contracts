@@ -19,7 +19,7 @@
 # in file order into multiSearchFirstIndex(); index 0 = no match = human (subject to §rules).
 # multiMatchAnyIndex() MUST NOT be used: it returns an unspecified matching index, not the first.
 # Ceiling: 256 needles per array (signatures + generic_tokens). The loader refuses to start above
-# it; past 256, chunk in file order and cascade — spec/metrics.md §6.
+# it; past 256, chunk in file order and cascade.
 # Both properties are verified on ClickHouse 24.8.14, not documented (the docs say leftmost match
 # in the haystack). Re-test on upgrade; a change renames an operator, it does not move a count.
 # Lower case: needles are compared against lower(ua) VERBATIM — nothing lower-cases this file —
@@ -28,8 +28,8 @@
 #
 # AI coverage checked 2026-09-05 against datafa.st/crawlers and @datafast/ai-crawl 1.0.9;
 # current Google, Mistral, Amazon, Kimi, Apple and Cohere documentation governs purpose.
-# Accepted purposes and source evidence: spec/fixtures/crawlers/expected.md
-# under Named crawler classification; spec/advanced-features.md §4 owns the policy.
+# Accepted purposes and their source evidence are recorded outside this repository,
+# with the named crawler classification policy.
 # These are claimed UA identities, not verified operators or proof of downstream content use.
 # Keep known AI crawlers with unsupported purposes as `ai_other`, and other clients as
 # `other`. Do not add bare Grok (also matches ngrok), Copilot

@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// millisPerDay is the UTC day the daily heartbeat of RFC-0001 §8.2 item 3 is
+// millisPerDay is the UTC day the daily heartbeat (C3) is
 // keyed on. A day index is floor(ms / 86_400_000), which is the UTC calendar
 // day for every value including negative ones (math/big's Div is Euclidean, so
 // it floors for a positive divisor) -- and a pre-epoch clock is exactly what
@@ -14,7 +14,7 @@ import (
 var millisPerDay = big.NewInt(86_400_000)
 
 // Clock is the SDK's clock abstraction (spec/sdk-conformance.md §3). It is
-// arbitrary precision because RFC-0001 §8.5 forbids correcting the host clock
+// arbitrary precision because C15 forbids correcting the host clock
 // and C15b sends one past int64: saturating into an int64 would be a
 // correction.
 type Clock struct {

@@ -136,7 +136,7 @@ func TestScenariosLoadAndAreOrdered(t *testing.T) {
 		}
 		seen[scenario.C] = scenario.Path
 		if scenario.Implements == "" {
-			t.Fatalf("%s names no `implements:`; CLAUDE.md requires every task name its spec section", scenario.Path)
+			t.Fatalf("%s names no `implements:`; every scenario names the spec section it implements", scenario.Path)
 		}
 		if scenario.Skip == "" && len(scenario.Arms) == 0 {
 			t.Fatalf("%s has no arms and no `skip:`; a scenario that runs nothing must say so", scenario.Path)
@@ -389,7 +389,7 @@ func TestStateDeadlineReadsTheExportAtArbitraryPrecision(t *testing.T) {
 	evidence := export(t, `{"install_due_at": "1788134400000", "queue": {"bytes": 0, "events": []}}`)
 	evidence.Arm = Arm{Env: map[string]string{"JELTO_NOW": "1788134400000"}}
 
-	// §8.2 item 4's deadline equals the draw instant, with no offset.
+	// C4's deadline equals the draw instant, with no offset.
 	mustPass(t, checkStateDeadline("install_due_at", evidence, Check{
 		Path: "install_due_at", Anchor: "jelto_now", Min: intp(0), Max: intp(0),
 	}))

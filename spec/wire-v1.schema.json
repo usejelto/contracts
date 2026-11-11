@@ -72,7 +72,7 @@
       "pattern": "^(?:\\d{4}-(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|\\d{4}-(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|\\d{4}-02-(?:0[1-9]|1\\d|2[0-8])|(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:[02468][048]|[13579][26])00)-02-29)$"
     },
     "cookieVisitorID": {
-      "$comment": "§5.1 `vid`: the cookie-mode identifier, 16 random bytes in base64url. The pattern is deliberately one a UUID CANNOT satisfy -- boundary 2 of spec/snippet.md §7 forbids the web cookie id and `install_id` meeting, and a grammar that cannot express a UUID makes that checkable here rather than in identity.go. The empty alternative is §5.1's `an empty X is an absent X`, which the parser has for `f`, `a` and `v`; rev 0.15 exists because this schema was once stricter than the parser on exactly that.",
+      "$comment": "§5.1 `vid`: the cookie-mode identifier, 16 random bytes in base64url. The pattern is deliberately one a UUID CANNOT satisfy -- boundary 2 (wire rev 0.20) forbids the web cookie id and `install_id` meeting, and a grammar that cannot express a UUID makes that checkable here rather than in identity.go. The empty alternative is §5.1's `an empty X is an absent X`, which the parser has for `f`, `a` and `v`; rev 0.15 exists because this schema was once stricter than the parser on exactly that.",
       "type": "string",
       "pattern": "^$|^[A-Za-z0-9_-]{22}$"
     },

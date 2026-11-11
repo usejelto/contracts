@@ -10,22 +10,22 @@
 # whose hosts make ingest REJECT the event (`spam_referrer`, spec/wire-v1.md §6). That list
 # stays small because a rejection deletes a row, and a real site wrongly listed there loses its
 # data permanently. This is the large list, and it is applied where a mistake costs a LABEL
-# rather than a row: layer 0 of the ref_host classification (spec/metrics.md §6b). Growing it
+# rather than a row: layer 0 of the ref_host classification (sources.yaml). Growing it
 # reclassifies history at the next query — no stored row changes and no count moves. The two
 # are unioned at load, so every host that is rejected at ingest is also labelled on read; rows
 # stored before a host was added to the ingest list are the ones this table exists for.
 #
 # Matching: `ref_host = host OR endsWith(ref_host, '.' || host)` — the host and its subdomains,
-# lower-cased, verbatim, exactly as sources.yaml's `exact_hosts` layer (spec/metrics.md §6a).
+# lower-cased, verbatim, exactly as sources.yaml's `exact_hosts` layer.
 # The refresh lower-cases what it fetches because upstream ships capitalised entries (QIWI.xyz
 # at the pinned commit), and the loader refuses to start on a capital: a needle compared against
-# a lower-cased column verbatim can never match, silently and forever (spec/metrics.md §6).
+# a lower-cased column verbatim can never match, silently and forever.
 #
 # The 256-needle ceiling does NOT bind this table. It is tested with `suffix IN <table>` over the
 # host's own parent suffixes, not with multiSearchFirstIndex, so it has no 256 limit to be
 # silently truncated by — the same exemption browser_markers.all_of and the installer prefixes
 # already have. IN is not a style choice: it builds a hash set, while has()/hasAny() scan the
-# table once per row and cost ~90x more (measured, spec/metrics.md §6b).
+# table once per row and cost ~90x more (measured).
 0-0.fr
 007agent-i.fr
 01casino-x.ru

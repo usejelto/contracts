@@ -15,7 +15,7 @@ notes: |
   The two field names this scenario reads, `backoff_step_ms` and
   `backoff_next_at`, are §3.2's and not any implementation's: the host EXPORTS
   them for `dumpstate` and the runner never opens a file. §3.2 derives both
-  from RFC-0001 §8.3 item 8 -- the step is what a new process must not restart
+  from the persisted retry backoff (C8) -- the step is what a new process must not restart
   at 1 s, and a step does not say *when*, which is why the deadline is a fact
   of its own. An SDK storing either in a plist or in SQLite passes these rows.
 

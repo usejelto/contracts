@@ -26,4 +26,4 @@ arms:
         request: 0
         event: 0
         value: "99999999999999999999"
-        why: "saturating into int64 would be the correction §8.5 forbids"
+        why: "saturating into int64 would be the correction C15 forbids"

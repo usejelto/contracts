@@ -1,4 +1,4 @@
-# Governing contract: spec/ci.md §7 in the source monorepo; see RELEASING.md.
+# Release procedure and configuration: see RELEASING.md.
 name: contracts release
 on:
   push:

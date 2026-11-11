@@ -22,7 +22,7 @@ var sources []byte
 func ReferrerSpam() []byte { return append([]byte(nil), referrerSpam...) }
 
 // ReferrerSpamRead returns a copy of the generated on-read referrer spam table
-// (spec/metrics.md §6b). It is the large one, and it never rejects anything:
+// (sources.yaml's layer 0). It is the large one, and it never rejects anything:
 // classification is on read, where growing the table reclassifies history.
 func ReferrerSpamRead() []byte { return append([]byte(nil), referrerSpamRead...) }
 

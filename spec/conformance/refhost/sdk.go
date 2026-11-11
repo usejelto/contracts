@@ -13,19 +13,19 @@ import (
 	"unicode/utf8"
 )
 
-// The numbers of RFC-0001 §8.3, in one place so each can be read against its
+// The SDK's delivery numbers, in one place so each can be read against its
 // rule.
 const (
-	initFlushDelayMS = 2_000           // item 7, "2 s after init"
-	trackDebounceMS  = 5_000           // item 7, "5 s debounce after track"
-	requestTimeout   = 5 * time.Second // item 8, "Request timeout 5 s"
-	backoffFirstMS   = 1_000           // item 8, "Backoff 1 s x 2"
-	backoffCapMS     = 3_600_000       // item 8, "up to 1 h"; wire §9 clamps Retry-After to the same ceiling
-	jitterFraction   = 0.20            // item 8, "+-20 % jitter"
+	initFlushDelayMS = 2_000           // C7, "2 s after init"
+	trackDebounceMS  = 5_000           // C7, "5 s debounce after track"
+	requestTimeout   = 5 * time.Second // "Request timeout 5 s"
+	backoffFirstMS   = 1_000           // C8, "Backoff 1 s x 2"
+	backoffCapMS     = 3_600_000       // C8, "up to 1 h"; wire §9 clamps Retry-After to the same ceiling
+	jitterFraction   = 0.20            // C8, "+-20 % jitter"
 
-	installClaimAfter = 30 * 24 * 60 * 60 * 1000 // §8.2 item 4, "or after 30 days of attempts"
+	installClaimAfter = 30 * 24 * 60 * 60 * 1000 // C4b, "or after 30 days of attempts"
 
-	// §8.2 item 3 (C3b): the longest a real-clock pump sleeps before re-reading the wall clock.
+	// The daily heartbeat (C3b): the longest a real-clock pump sleeps before re-reading the wall clock.
 	maxRealWaitMS = 60_000
 
 	// Bound best-effort termination flushes so a blocked request cannot prevent exit (C1).
@@ -94,14 +94,14 @@ func NewSDK(log *Debug, clock *Clock, store *Store, endpoint, mock, version stri
 	}
 }
 
-// --- surface (RFC-0001 §8.1) -------------------------------------------------
+// --- surface -----------------------------------------------------------------
 
-// Init is §8.1's init(key, app?). It returns without touching the filesystem
-// or the network: everything real happens on the pump (§8.2 item 1, C1).
+// Init is the SDK's init(key, app?). It returns without touching the filesystem
+// or the network: everything real happens on the pump (C1).
 func (s *SDK) Init(key, slug string, origin ...string) {
 	s.mu.Lock()
 	if s.started && !s.disabled {
-		// §8.1: init happens "once".
+		// init happens "once".
 		s.mu.Unlock()
 		return
 	}
@@ -157,7 +157,7 @@ func (s *SDK) bootstrap(ready chan struct{}) {
 	s.observationMu.Unlock()
 
 	state := s.store.Update(func(state *State) {
-		// §8.2 item 2: load the install_id, create a UUIDv4 if absent.
+		// C2: load the install_id, create a UUIDv4 if absent.
 		if state.InstallID == "" || state.InstallID == NilUUID {
 			state.InstallID = newUUIDv4()
 			state.InstallOrigin = s.installOrigin
@@ -167,7 +167,7 @@ func (s *SDK) bootstrap(ready chan struct{}) {
 		if state.InstallProps == nil {
 			state.InstallProps = map[string]string{}
 		}
-		// §8.2 item 4: persist the immediate deadline once, at the draw instant,
+		// C4: persist the immediate deadline once, at the draw instant,
 		// so a relaunch resumes it even after an abrupt death (C4c).
 		if !state.InstallClaimed && state.InstallDueAt == "" {
 			state.InstallDueAt = formatBig(now)
@@ -180,14 +180,14 @@ func (s *SDK) bootstrap(ready chan struct{}) {
 	for key, value := range state.InstallProps {
 		s.props[key] = value
 	}
-	// §8.3 item 7: the first flush trigger.
+	// C7: the first flush trigger.
 	s.initFlushAt = after(now, initFlushDelayMS)
 	s.installEnqueuedThisRun = s.queue.Contains("install")
 	s.mu.Unlock()
 
 	s.observeAppVersion()
 
-	// §8.2 item 3: one heartbeat per UTC day.
+	// C3: one heartbeat per UTC day.
 	day := s.clock.DayIndex()
 	if state.LastHeartbeatDay != day {
 		s.store.Update(func(state *State) { state.LastHeartbeatDay = day })
@@ -197,11 +197,11 @@ func (s *SDK) bootstrap(ready chan struct{}) {
 	close(ready)
 }
 
-// Track is §8.1's track(name, props?). Everything it can refuse, it refuses
+// Track is the SDK's track(name, props?). Everything it can refuse, it refuses
 // here, in the client, with a debug line: W2 and W3.
 func (s *SDK) Track(name string, props map[string]any) {
 	if !s.awaitReady() {
-		// §8.1: "queued; no-op before init" (C5).
+		// "queued; no-op before init" (C5).
 		return
 	}
 	if !reEventName.MatchString(name) {
@@ -222,7 +222,7 @@ func (s *SDK) Track(name string, props map[string]any) {
 	now := s.clock.Now()
 	s.enqueue(QueuedEvent{ID: newUUIDv7(now), N: name, T: literal(now), Props: props})
 	s.mu.Lock()
-	// §8.3 item 7: a 5 s debounce, reset by every track.
+	// C7: a 5 s debounce, reset by every track.
 	s.trackFlushAt = after(now, trackDebounceMS)
 	s.mu.Unlock()
 	s.notify()
@@ -252,7 +252,7 @@ func (s *SDK) Onboarding(step, status, reason string) {
 	s.Track("onboarding:"+step, props)
 }
 
-// SetProps is §8.1's setProps: "install properties (license, edition ...):
+// SetProps is the SDK's setProps: "install properties (license, edition ...):
 // persisted, sent with every heartbeat, an immediate heartbeat on change".
 func (s *SDK) SetProps(props map[string]any) {
 	if !s.awaitReady() {
@@ -319,7 +319,7 @@ func (s *SDK) SetProps(props map[string]any) {
 	s.notify()
 }
 
-// InstallID is §8.1's installId. It is empty after disable() (C18).
+// InstallID is the SDK's installId. It is empty after disable() (C18).
 func (s *SDK) InstallID() string {
 	if !s.awaitReady() {
 		return ""
@@ -329,8 +329,8 @@ func (s *SDK) InstallID() string {
 	return s.install
 }
 
-// Reset is §8.1's "rotate". NO RULE names what else it rotates; RFC-0001 §8.1
-// says only "view, rotate, wipe (queue + id)", and no C-scenario exercises it.
+// Reset is the SDK's "rotate". NO RULE names what else it rotates; the
+// rule says only "view, rotate, wipe (queue + id)", and no C-scenario exercises it.
 // refhost rotates the id and, because a new id is a new install, forgets the
 // install claim and the heartbeat day with it.
 func (s *SDK) Reset() {
@@ -379,7 +379,7 @@ func (s *SDK) LegacyVersion() bool {
 	return s.store.Commit(func(state *State) { state.LastAppVersion = "" })
 }
 
-// Disable is §8.7 item 18: delete the queue file and the install_id;
+// Disable is C18's opt-out: delete the queue file and the install_id;
 // subsequent calls are no-ops until the next init.
 func (s *SDK) Disable() {
 	if !s.awaitReady() {
@@ -397,7 +397,7 @@ func (s *SDK) Disable() {
 	s.notify()
 }
 
-// Stop is the host process going away: §8.3 item 7's best-effort termination
+// Stop is the host process going away: a best-effort termination
 // flush, bounded so C1's "process exits within 1 s" holds.
 func (s *SDK) Stop() {
 	s.mu.Lock()
@@ -415,7 +415,7 @@ func (s *SDK) Stop() {
 	for s.queue.Len() != 0 {
 		select {
 		case <-deadline:
-			s.log.Printf("termination flush gave up with %d events queued (best effort, RFC-0001 §8.3 item 7)", s.queue.Len())
+			s.log.Printf("termination flush gave up with %d events queued (best effort)", s.queue.Len())
 			goto stop
 		case <-time.After(5 * time.Millisecond):
 		}
@@ -511,7 +511,7 @@ func (s *SDK) awaitBarrier(seq uint64, budget time.Duration) bool {
 	s.mu.Unlock()
 	if !started {
 		// Before init there is no pump, so nothing can become due and there is
-		// nothing to wait for (§8.2 item 5, C5).
+		// nothing to wait for (C5).
 		return true
 	}
 	timer := time.NewTimer(budget)
@@ -554,7 +554,7 @@ func (s *SDK) enqueue(event QueuedEvent) {
 		event.Metadata = &EventMetadata{Platform: platform, Version: version}
 	}
 	if dropped := s.queue.Append(event); dropped > 0 {
-		s.log.Printf("queue cap reached: dropped %d oldest event(s) (RFC-0001 §8.3 item 6)", dropped)
+		s.log.Printf("queue cap reached: dropped %d oldest event(s) (1 MB or 1 000 events)", dropped)
 	}
 	s.notify()
 }
@@ -649,7 +649,7 @@ func (s *SDK) pump(quit, done chan struct{}) {
 			}
 			continue
 		}
-		// RFC-0001 §8.2 item 3 wants the day boundary on a clock that keeps
+		// C3b wants the day boundary on a clock that keeps
 		// running through system sleep, and a Go timer counts the monotonic
 		// clock, which does not. Capping the wait bounds how late a sleep can
 		// make the C3b check: a woken host re-reads the wall clock within a
@@ -693,11 +693,11 @@ func (s *SDK) step(now *big.Int) (*big.Int, bool) {
 	}
 	state := s.store.Get()
 
-	// §8.2 item 4: "Mark claimed on 202, or after 30 days of attempts."
+	// C4, C4b: "Mark claimed on 202, or after 30 days of attempts."
 	firstTry := parseBig(state.InstallFirstTry)
 	if !state.InstallClaimed && firstTry != nil && due(now, after(firstTry, installClaimAfter)) {
 		s.store.Update(func(state *State) { state.InstallClaimed = true })
-		s.log.Printf("install claimed after 30 days of attempts without a 202 (RFC-0001 §8.2 item 4)")
+		s.log.Printf("install claimed after 30 days of attempts without a 202")
 		s.observationMu.Unlock()
 		return nil, true
 	}
@@ -720,7 +720,7 @@ func (s *SDK) step(now *big.Int) (*big.Int, bool) {
 		}
 		s.mu.Lock()
 		s.installEnqueuedThisRun = true
-		// Queue immediately while preserving §8.3 item 7's initial flush timer.
+		// Queue immediately while preserving C7's initial flush timer.
 		if s.initFlushAt == nil {
 			s.pending = true
 		}
@@ -730,7 +730,7 @@ func (s *SDK) step(now *big.Int) (*big.Int, bool) {
 		return nil, true
 	}
 
-	// §8.2 item 3, C3b: the day check belongs to the running SDK, not to Init
+	// C3b: the day check belongs to the running SDK, not to Init
 	// alone, or a process that outlives a UTC midnight is active only on the
 	// day it launched. Gated on bootstrap so it can never race bootstrap's own
 	// check into a second heartbeat for the same day, and run under
@@ -749,7 +749,7 @@ func (s *SDK) step(now *big.Int) (*big.Int, bool) {
 
 	s.observationMu.Unlock()
 
-	// §8.6 / wire §8: the kill switch. Nothing is sent while it is on; the
+	// wire §8: the kill switch. Nothing is sent while it is on; the
 	// queue keeps accepting up to its cap.
 	stopUntil := parseBig(state.StopUntilMS)
 	if stopUntil != nil && !due(now, stopUntil) {
@@ -761,7 +761,7 @@ func (s *SDK) step(now *big.Int) (*big.Int, bool) {
 		return nil, true
 	}
 
-	// The retry gate (§8.3 item 8). It governs the probe as well: a probe that
+	// The retry gate (C8). It governs the probe as well: a probe that
 	// failed on the network is retried, not repeated at once.
 	retryAt := parseBig(state.BackoffNextAt)
 	if retryAt != nil && !due(now, retryAt) {
@@ -954,7 +954,7 @@ type outcome struct {
 }
 
 func (s *SDK) post(body []byte) outcome {
-	// §8.7 item 17: "prints every payload before it is sent".
+	// C17: "prints every payload before it is sent".
 	s.log.Payload(body)
 
 	request, err := http.NewRequest(http.MethodPost, s.endpoint, bytes.NewReader(body))
@@ -971,7 +971,7 @@ func (s *SDK) post(body []byte) outcome {
 	s.mu.Unlock()
 	response, err := client.Do(request)
 	if err != nil {
-		s.log.Printf("request failed: %v (network error, retryable per RFC-0001 §8.3 item 8)", err)
+		s.log.Printf("request failed: %v (network error, retryable)", err)
 		return outcome{err: err, retryable: true}
 	}
 	defer func() { _ = response.Body.Close() }()
@@ -988,7 +988,7 @@ func (s *SDK) post(body []byte) outcome {
 func (s *SDK) applyAccepted(now *big.Int, result outcome, hadInstall bool) {
 	parsed, err := decodeResponse(result.body)
 	if err != nil {
-		// §8.3 item 10: swallowed and logged. The status was 202, so the
+		// Swallowed and logged. The status was 202, so the
 		// envelope was accepted whatever the body said (C10's invalid JSON).
 		s.log.Printf("202 with a body that is not JSON: %v", err)
 		if hadInstall {
@@ -997,7 +997,7 @@ func (s *SDK) applyAccepted(now *big.Int, result outcome, hadInstall bool) {
 		return
 	}
 	if hadInstall {
-		// §8.2 item 4: "Mark claimed on 202".
+		// C4: "Mark claimed on 202".
 		s.store.Update(func(state *State) { state.InstallClaimed = true })
 	}
 	for _, rejection := range parsed.Rejected {
@@ -1043,10 +1043,10 @@ func (s *SDK) finalRefusal(result outcome) {
 	if parsed, err := decodeResponse(result.body); err == nil && parsed.Error != "" {
 		message = " " + parsed.Error
 	}
-	s.log.Printf("batch dropped: status=%d%s -- final, not retried (RFC-0001 §8.3 items 8-9, spec/wire-v1.md §2a)", result.status, message)
+	s.log.Printf("batch dropped: status=%d%s -- final, not retried (spec/wire-v1.md §2a)", result.status, message)
 }
 
-// backoff implements RFC-0001 §8.3 item 8 composed with spec/wire-v1.md §9:
+// backoff implements C8's backoff composed with spec/wire-v1.md §9:
 // both are floors and the next attempt is at the later of the two.
 func (s *SDK) backoff(now *big.Int, result outcome) {
 	state := s.store.Get()
@@ -1086,7 +1086,7 @@ func (s *SDK) backoff(now *big.Int, result outcome) {
 		nextStep = backoffCapMS
 	}
 	s.store.Update(func(state *State) {
-		// §8.3 item 8: persisted across launches, so a new process continues
+		// Persisted across launches, so a new process continues
 		// the schedule rather than restarting at 1 s (C8).
 		state.BackoffStepMS = nextStep
 		state.BackoffNextAt = formatBig(next)
@@ -1121,7 +1121,7 @@ func parseRetryAfter(value string, present bool) (int64, bool) {
 }
 
 // literal renders the clock as the JSON number `t` carries. It is the decimal
-// the clock holds, never a float64: RFC-0001 §8.5 forbids correcting it and
+// the clock holds, never a float64: C15 forbids correcting it and
 // C15b sends one past int64.
 func literal(now *big.Int) []byte {
 	return []byte(now.String())

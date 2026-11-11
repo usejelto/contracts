@@ -2,8 +2,8 @@
 // conformance harness. It is not a customer SDK and does not claim platform
 // integration, crash-safety, or the SDK memory budget.
 //
-// Behavior follows RFC-0001 §8 and spec/wire-v1.md. NO RULE comments identify
-// choices the contract does not settle.
+// Behavior follows spec/sdk-conformance.md and spec/wire-v1.md. NO RULE
+// comments identify choices the contract does not settle.
 //
 // # Command protocol
 //

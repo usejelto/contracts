@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-// Debug is RFC-0001 §8.7 item 17: JELTO_DEBUG=1 prints every payload before it
+// Debug is C17's rule: JELTO_DEBUG=1 prints every payload before it
 // is sent. When it is off, NOTHING is written -- C10 asserts "nothing written
 // to stderr except with JELTO_DEBUG=1", which makes silence part of the
 // contract and not merely a preference.

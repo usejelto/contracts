@@ -12,7 +12,7 @@
 # WRITE SIDE, and the only signature file on one: a host here makes ingest DELETE the event
 # (spec/wire-v1.md §6). That is why it is short. The large generated list is
 # spec/signatures/referrer-spam-read.txt, applied on read where a mistake costs a label rather
-# than a row (spec/metrics.md §6b); the loader unions this file into it, so every host here is
+# than a row (sources.yaml's layer 0); the loader unions this file into it, so every host here is
 # also labelled on read for the rows that were stored before it was added.
 semalt.com
 buttons-for-website.com

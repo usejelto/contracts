@@ -32,7 +32,7 @@ var (
 // Wire limits, all from spec/wire-v1.md §2 and §3.
 const (
 	maxBodyBytes    = 65_536 // §2, and W1's "body ≤ 64 KB"
-	maxEventsPerReq = 100    // §2, and RFC-0001 §8.3 item 7's "Batch ≤ 100 events"
+	maxEventsPerReq = 100    // §2, and W1's "≤ 100 events"
 	maxProps        = 20     // §3, and §4's heartbeat cap since rev 0.16 (W3)
 	maxPropString   = 200    // §3
 	maxReasonChars  = 64     // §4
@@ -190,7 +190,7 @@ func quote(value string) string {
 
 // ingestResponse is the part of a 202 body an SDK acts on: spec/wire-v1.md §6
 // and §8. Nothing else in the body is read, and an unreadable body is a
-// swallowed failure (§8.3 item 10), never a retry.
+// swallowed failure, never a retry.
 type ingestResponse struct {
 	Rejected []struct {
 		I      int    `json:"i"`

@@ -7,8 +7,8 @@ import (
 	"sync"
 )
 
-// Queue caps from RFC-0001 §8.3 item 6: "append-only file, cap 1 MB or 1 000
-// events; oldest dropped first" (C6).
+// Queue caps: "append-only file, cap 1 MB or 1 000 events; oldest dropped
+// first" (C6).
 const (
 	queueMaxBytes  = 1 << 20
 	queueMaxEvents = 1000
@@ -62,7 +62,7 @@ type entry struct {
 func NewQueue(path string) *Queue { return &Queue{path: path} }
 
 // Load reads the file if it exists. Like Load on the state store it creates
-// nothing: before `init` the SDK touches no file (§8.2 item 5).
+// nothing: before `init` the SDK touches no file (C5).
 func (q *Queue) Load(pendingUpdateID ...string) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -81,7 +81,7 @@ func (q *Queue) Load(pendingUpdateID ...string) {
 		}
 		if err := json.Unmarshal(line, &record); err != nil {
 			// A half-written line from a killed process costs that event, not
-			// the file (§8.3 item 10).
+			// the file.
 			continue
 		}
 		if record.RecoveredUpdateID != "" {
@@ -130,7 +130,7 @@ func (q *Queue) trimLocked() int {
 }
 
 // Head returns up to n events from the front without removing them: a batch is
-// only removed once the server has accepted it (§8.3 item 8 retries the SAME
+// only removed once the server has accepted it (C8 retries the SAME
 // batch, and spec/wire-v1.md §6 forbids altering its `id`s).
 func (q *Queue) Head(n int) []QueuedEvent {
 	q.mu.Lock()
@@ -187,7 +187,7 @@ func (q *Queue) Len() int {
 
 // Contains reports whether an event with this name is queued. `install` is
 // enqueued once per launch at most, and only when the previous launch's copy
-// is not still waiting (RFC-0001 §8.2 item 4, C4 "exactly one install event").
+// is not still waiting (C4 "exactly one install event").
 func (q *Queue) Contains(name string) bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -280,7 +280,7 @@ func (q *Queue) DiscardIdentityEvents() bool {
 	return true
 }
 
-// Delete is disable()'s half of §8.7 item 18.
+// Delete is disable()'s half of C18's wipe.
 func (q *Queue) Delete() {
 	q.mu.Lock()
 	defer q.mu.Unlock()

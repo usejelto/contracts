@@ -12,7 +12,7 @@ notes: |
   `down` is replaced by `hangup` throughout: mockd's doc.go, "What the
   recording cannot express" -- a refused connection is never recorded, so the
   arm that must show "no response and so no header" would have nothing to show.
-  Both are network errors under RFC-0001 §8.3 item 8, the only distinction the
+  Both are network errors under the retry rule, the only distinction the
   contract draws.
 arms:
   - name: no response, so no header -- the pure 1, 2, 4 backoff
