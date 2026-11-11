@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := test
-.PHONY: build test test-package conformance conformance-twice package signatures
+.PHONY: build test test-package conformance conformance-twice package signatures security
 GO ?= go
 PYTHON ?= python3
 EXE := $(if $(filter Windows_NT,$(OS)),.exe,)
@@ -8,6 +8,8 @@ VERSION := $(shell $(PYTHON) -c 'import json; print(json.load(open("spec/contrac
 # The shared quality targets (hooks, secrets, osv, workflow-audit, sast) are
 # maintained here and vendored into every other Jelto repository.
 include tools/quality/quality.mk
+
+security: secrets
 
 build:
 	mkdir -p bin
