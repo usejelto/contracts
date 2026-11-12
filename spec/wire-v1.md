@@ -112,15 +112,15 @@ test **fails if the entry outlives its reason** — that is, if `402` ever becom
 still listed. It is an append and the freeze would not have forbidden it later; it lands now
 because C9b already depends on it.
 
-**Where each row's body comes from.** Every one but three was **sent to the running server on the
-compose stack and read off the response**: `202` (both the empty and the `stop` form), `204`,
+**Where each row's body comes from.** Every one but three was **sent to a running server and read
+off the response**: `202` (both the empty and the `stop` form), `204`,
 `400` (`malformed`, `unsupported_version`, `empty`, `too_many_events`), `405`, `413`, `429` (both
 buckets) and `500`. The `503` was driven through the real handler in-process instead, because
-provoking it over the wire means filling the 2 GiB buffer-plus-spool ceiling; it shares
-`writeRetry` with the `429`, whose `{}` body and `Retry-After` were measured. The two fixture-mode
+provoking it over the wire means filling the 2 GiB buffer-plus-spool ceiling; it shares the
+`429`'s retry path, whose `{}` body and `Retry-After` were measured. The two fixture-mode
 `400`s are read from the source and are not reachable on a production build. `402` is specified,
-not measured — see above. `internal/ingest.TestIngestAnswersTheBodiesTheWireDocuments` asserts the
-exact bytes of each so this table cannot drift from the handler.
+not measured — see above. The server's tests assert the exact bytes of each, so this table cannot
+drift from the handler.
 
 ## 3. Event — common fields
 
@@ -348,7 +348,7 @@ on-read `ref_host` classification beside `sources.yaml`, where growing it reclas
 a mistake costs a label rather than a row. The reason value itself stays in this enum.
 
 **Delivery semantics.** A `202` means the envelope was accepted for processing, not that its rows
-are durable, and the pipeline is **at-least-once**: `internal/ingest` retries a failed insert,
+are durable, and the pipeline is **at-least-once**: the server retries a failed insert,
 spools on failure, and re-drains a spool file whose delete did not complete. Duplicates from those
 paths are suppressed in ClickHouse by `insert_deduplication_token` = the batch id, stable across
 every retry and carried across the spool as the file name. `id`'s 10-minute window
@@ -541,6 +541,13 @@ has no product to attribute and is left to process metrics.
 
 ## Amendments
 
+- 2026-11-12, editorial, carrying no revision of its own: **the amendment log is restated without
+  private sources; no requirement changed.** Each entry keeps its revision, headline, sections,
+  compatibility class, rule and reason; server file and line references, test names, internal
+  review identifiers and other products' source code are gone, and four explanatory sentences
+  above this log name the server instead of its source. No field, status, number, MUST, SHOULD or
+  example moved, and the document stays at rev 0.26.
+
 - 2026-11-11, editorial, carrying no revision of its own: **removed references to non-public
   documents; no requirement changed.** Where a citation backed a rule, the rule is now stated in
   words or points at this document, `spec/sdk-conformance.md` or `spec/wire-v1.schema.json`. No
@@ -572,669 +579,478 @@ has no product to attribute and is left to process metrics.
   Written down because the four app SDKs had shipped four answers: .NET refused, Electron and
   Swift fell through to the next host, Tauri retried an empty endpoint indefinitely.
   `spec/sdk-conformance.md` v0.18 §5 adds the matching owner-only storage rule.
+
 - rev 0.21: **an ignored `f` is counted too — the `f`/`vid` asymmetry is retired** (§5.1) —
   *the account API's `memory_active` fact, and the ingest handler.* **No field changes and the
-  freeze is not in play**: this is server behaviour and one new value in `ingest_counters.reason`, an
-  open `LowCardinality(String)`. No sender is affected, no validation moves, nothing is narrowed.
-
-  What it reverses is a sentence rev 0.20 wrote deliberately — *"Unlike `f`, being ignored is counted
-  and not silent"* — and the reversal is not an oversight, so the reasoning is recorded rather than
-  left to be inferred. **The difference between a cookie and a `localStorage` label is severity, and
-  severity was never the question.** That sentence was written when an ignored `f` was one thing: a
-  LOST LABEL, a piece of attribution the customer had chosen not to keep, with nothing to report
-  about it. What changed is not how bad the value is but **what its absence is evidence of**. Since
-  the account API's request/fact split (`memory_active`, `cookie_mode_active`), an ignored `f` is the
-  only signal anywhere that a tag pasted with `data-memory="on"` is still writing `jelto_first` into
-  every visitor's `localStorage` while the setting is off and the paragraph the customer publishes
-  denies it. The server dropping the label does not reach into the browser, exactly as its refusal to
-  use a `vid` does not un-set a cookie.
-
-  So both axes now have the same shape, for the same reason: **under-disclosure is the harmful
-  direction, and severity is an argument about how bad a thing is, never about whether it can be
-  seen.** A discarded value leaves no row — that is what made both facts invisible — so both leave a
-  counter instead. `memory_ignored` rides an ACCEPTED event alongside `cookie_id_ignored` and is
+  freeze is not in play**: this is server behaviour and one new value in `ingest_counters.reason`,
+  an open `LowCardinality(String)`. No sender is affected, no validation moves, nothing is
+  narrowed. It deliberately reverses rev 0.20's *"Unlike `f`, being ignored is counted and not
+  silent"*. That sentence was written when an ignored `f` was only a lost label the customer had
+  chosen not to keep; what changed is not how bad the value is but what its absence is evidence
+  of. Since the account API split the request from the fact (`memory_active`,
+  `cookie_mode_active`), an ignored `f` is the only signal that a tag pasted with
+  `data-memory="on"` is still writing `jelto_first` into every visitor's `localStorage` while the
+  setting is off and the paragraph the customer publishes denies it; the server dropping the label
+  does not reach into the browser, as ignoring a `vid` does not un-set a cookie. Both axes now
+  follow one rule: **under-disclosure is the harmful direction, and severity decides how bad a
+  thing is, never whether it can be seen.** A discarded value leaves no row, so each leaves a
+  counter instead: `memory_ignored` rides an accepted event alongside `cookie_id_ignored` and is
   excluded from the Ops card's rejections for the same reason.
 
-- rev 0.20: **`vid` becomes a field — the reserved name is spent** (§5.1, §10) —
-  *the snippet's cookie mode, and the product decision behind it.* **This spends the insurance
-  rev 0.13 bought, on the thing it was bought for.** §10 called a reserved name "the only insurance
-  the freeze actually calls for", and a reader who finds `vid` in §5.1 should be able to see that
-  the insurance was *used* rather than wonder whether the freeze was broken: rev 0.13 took the name
-  and nothing else, precisely so that this revision would be an ordinary append. It is one. §10's
-  first line has permitted it the whole time, at the same cost it would have charged at rev 0.13,
-  and nothing here is narrowed — no sender that predates this revision is affected, because a client
-  that has never heard of `vid` sends none and the server answers exactly as it did.
-  **§5.1** adds the row. Three of its clauses are decisions rather than description.
-  **The grammar is one a UUID cannot satisfy** (`^[A-Za-z0-9_-]{22}$`, 16 random bytes in base64url),
-  and that is boundary 2 — *the web cookie id and `install_id` never appear in the same row or the
-  same table* — made **checkable by reading the grammar** instead of trusted to a derivation. The
-  weaker alternative was a UUID plus a domain-separated hash, which is correct and which no reviewer
-  can verify without reading `identity.go`; this way an `install_id` cannot be placed in the field at
-  all. **The value is never stored** — `visitor_id` is `sipHash-2-4("jelto-cookie-v1" ‖ product_id ‖ vid)`,
-  domain-separated from the salted cookieless hash and from the app surface's `cityHash64(install_id)`
-  by using a different construction over a different domain, which `internal/ingest/identity` pins with
-  a test that feeds the cookie constructor the base64url of the very UUID bytes the app constructor
-  hashes and asserts the two do not meet. **And it carries no daily salt**, which is the whole feature:
-  a cookie that survives midnight is what lets cookie mode's range `visitors` be strictly less than the
-  sum of its per-day `visitors`, where the cookieless mode's is equal to it by construction.
-  **Ignored, never rejected, and counted.** A `vid` from a product whose cookie mode is off leaves the
-  row's `visitor_id` at the daily salted hash and the event is **stored** — the `f` precedent in §5.1,
-  and for a stronger reason: the sender that ships `vid` early is a customer who pasted the wrong file,
-  and dropping their pageviews would cure a text mismatch with a silent analytics blackout. Unlike `f`
-  it is **not silent**, because it is evidence that a real cookie is in a real browser on a site whose
-  published paragraph denies it — the under-disclosure direction, aimed at the readers least able to
-  check. `cookie_id_ignored` is what makes that state visible on the Ops card.
-  **Executed, unlike rev 0.18.** This revision is *not* specified ahead of its implementation: the
-  parser reads the field, the schema constrains it, `spec/wirecheck`'s census knows it, and the
-  Go/schema agreement corpus carries mutants for it. What is **not** here is the sender — `jelto.cookie.js`
-  is a separate build on its own budget and is not this document's to ship.
+- rev 0.20: **`vid` becomes a field — the reserved name is spent** (§5.1, §10) — *the snippet's
+  cookie mode, and the product decision behind it.* This is the use rev 0.13 reserved the name
+  for, and an ordinary **append**: §10's first line has always permitted it, at the cost it would
+  have had at rev 0.13, nothing is narrowed, and a client that has never heard of `vid` sends none
+  and is answered exactly as before. **§5.1** adds the row; three of its clauses are decisions.
+  **The grammar is one a UUID cannot satisfy** (`^[A-Za-z0-9_-]{22}$`, 16 random bytes in
+  base64url), which makes boundary 2 — the web cookie id and `install_id` never appear in the same
+  row or the same table — checkable by reading the grammar rather than trusted to a derivation; a
+  UUID plus a domain-separated hash would be correct too, but no reviewer could verify it without
+  reading the server's code. **The value is never stored**: `visitor_id` is
+  `sipHash-2-4("jelto-cookie-v1" ‖ product_id ‖ vid)`, a different construction over a different
+  domain from the salted cookieless hash and from the app surface's `cityHash64(install_id)`.
+  **And it carries no daily salt**, which is the whole feature: a cookie that survives midnight
+  lets cookie mode's range `visitors` be strictly less than the sum of its per-day `visitors`,
+  where the cookieless mode's equals it by construction. **Ignored, never rejected, and counted**:
+  a `vid` from a product whose cookie mode is off leaves the row's `visitor_id` at the daily salted
+  hash and the event is stored, as with `f`, because the sender shipping `vid` early is a customer
+  who pasted the wrong file, and dropping their pageviews would answer a text mismatch with a
+  silent analytics blackout. Unlike `f` it is not silent: it is evidence of a real cookie in a real
+  browser on a site whose published paragraph denies one, and `cookie_id_ignored` makes that
+  visible on the Ops card. **Implemented, unlike rev 0.18**: the server's parser reads the field,
+  the schema constrains it and `spec/wirecheck`'s census knows it. The sender, `jelto.cookie.js`,
+  is a separate build on its own budget and not this document's to ship.
 
-- rev 0.19: **the production ingest host is named** (§1) — *the snippet's install block and cookie mode,
-  and the M3 exit criterion.* This is an
-  **append in the only sense that matters** — it fixes a value that was already normative on the
-  web surface and gives the app SDKs something to default to — and it lands before the freeze
-  because after it the two launch SDKs would be shipping against a contract that names no host.
-  What it repairs is not a missing sentence but a **silent failure in two of the three clients**:
-  `spec/sdk-conformance.md` §3 makes `JELTO_ENDPOINT` required and the runner injects it into
-  every host it spawns, so the conformance suite certified both SDKs — twice in a row, repeatedly —
-  against a configuration **no shipped application can reproduce**. A green gate on a path that
-  does not exist in production is the same class of defect as an assertion nothing runs, and this
-  is the largest instance of it found so far. The suite is not at fault and needs no change: §3's
-  requirement is correct for a conformance host, and the default is a thing only an SDK's own unit
-  tests can assert, which is where it now is.
+- rev 0.19: **the production ingest host is named** (§1) — *the snippet's install block and cookie
+  mode, and the M3 exit criterion.* An **append**: it fixes a value that was already normative on
+  the web surface and gives the app SDKs something to default to, and it lands before the freeze
+  because after it the launch SDKs would ship against a contract that names no host. It repairs a
+  silent failure in two of the three clients: `spec/sdk-conformance.md` §3 makes `JELTO_ENDPOINT`
+  required and the runner injects it into every host it spawns, so the suite certified both SDKs
+  against a configuration no shipped application can reproduce. The suite needs no change — §3's
+  requirement is right for a conformance host — and the default is asserted where only it can be,
+  in each SDK's own unit tests.
 
-- rev 0.18: **`purchase` reserved as a name a client may not send** (§4, §6, §7) — *the revenue product
-  decisions.* The mechanism ships in
-  **M2** and the metrics and the card in **M3**, but reserving the name lands now,
-  before the end-of-M1 freeze, for exactly the reason `engagement` landed in rev 0.9 for metrics
-  that did not ship until M2: reserving a name is a **narrowing** — a new rejection, not an
-  append — and a narrowing is the one class of change §10's freeze forecloses. Everything else
-  revenue touches is either an append this document already permits forever, or is not this wire
-  at all: a payment reaches Jelto over `POST /api/v1/payments`,
-  an endpoint this document neither governs nor freezes.
-  **§4** adds `purchase` — surface **both**, no client-facing required fields because it has no
-  client-facing writer, fixed props `amount` (a decimal as a string, stored as sent and never
-  rounded, negative for a refund) and `currency` (ISO 4217, uppercase) — and states plainly that
-  these rows are written only by `POST /api/v1/payments`, never by a sender on `/v1/e`: that
-  endpoint is authenticated by a public product key and an `Origin` check, the right trust level
-  for a pageview and the wrong one for a number that reaches an invoice.
-  **§6** adds `reserved_event` for a client-sent `purchase`. `unknown_event` would have been a
-  lie — the name is known to the server, it is forbidden, not merely unrecognised — and worse, it
-  is the rejection `event_schema` (§7) exists to cure: a customer could add `purchase` to their
-  own allowlist and have it **accepted**, which is exactly the failure `reserved_event` exists to
-  prevent by running ahead of the `event_schema` lookup rather than through it.
-  **§7** states that `purchase` may not be added to a product's `event_schema` under any prop
-  set, and why an entry there would buy a client nothing even if saved: §4 reserves the name at
-  the wire, not by the absence of an allowlist row, so the settings write path refuses to save
-  one naming `purchase` rather than saving an entry that would do nothing.
-  **§10** gains one sentence naming the freeze's real trigger: it holds because a build this
-  project does not control will be in the field, not because a milestone ends. End-of-M1 is that
-  build's expected date, not its cause, so the freeze is re-openable on evidence of when such a
-  build actually ships — never on preference for a longer or shorter window to add a field. No
-  existing rule in §10 is loosened by this; it only names why the date is the one it is.
-  **Nothing here is executed.** This revision is **specified ahead of its implementation** — the
-  phrase this document already uses for `402` (§2a) and for `license`'s Postgres grammar
-  (rev 0.16) — because `internal/ingest` has no code path for `purchase`, `POST
-  /api/v1/payments` does not exist, and no test asserts a byte of the above against a running
-  server. Nothing was sent, measured, or read off ClickHouse for this entry.
-  **The schema needs no edit.** `spec/wire-v1.schema.json` validates a request body's *shape*,
-  and `event_schema` membership, `unknown_event` and now `reserved_event` are business-rule
-  lookups the schema has never performed — a client-sent `purchase` is shape-valid JSON exactly
-  as any other unbranched custom event is, and no `pattern` or `const` this side of a full
-  allowlist reproduces "this name is forbidden, not merely unallowlisted." The precedent is the
-  rev 0.15 amendment: the schema is deliberately left behind a rule the parser does not yet
-  enforce, because a constraint no sender's request can exercise would pass the agreement test
-  while diverging silently from what this revision means.
+- rev 0.18: **`purchase` reserved as a name a client may not send** (§4, §6, §7) — *the revenue
+  product decisions.* The mechanism ships in **M2** and the metrics and the card in **M3**, but the
+  name is reserved now, before the end-of-M1 freeze, for the reason `engagement` landed in rev 0.9:
+  reserving a name is a **narrowing** — a new rejection, not an append — and a narrowing is the one
+  class of change §10's freeze forecloses. Everything else revenue touches is an append or is not
+  this wire: a payment arrives over `POST /api/v1/payments`, which this document neither governs
+  nor freezes. **§4** adds `purchase` — surface both, no client-facing required fields, fixed props
+  `amount` (a decimal as a string, stored as sent, never rounded, negative for a refund) and
+  `currency` (ISO 4217, uppercase) — written only by `POST /api/v1/payments`, never by a sender on
+  `/v1/e`, whose public product key and `Origin` check are the right trust level for a pageview and
+  the wrong one for a number that reaches an invoice. **§6** adds `reserved_event` for a
+  client-sent `purchase`: `unknown_event` would be untrue (the name is known and forbidden) and is
+  the rejection `event_schema` (§7) cures, so a customer could allowlist `purchase` and have it
+  accepted; `reserved_event` runs ahead of the `event_schema` lookup rather than through it.
+  **§7** states that `purchase` may not be added to a product's `event_schema` under any prop set;
+  such an entry would do nothing, because §4 reserves the name at the wire, so the settings write
+  path refuses to save one. **§10** gains one sentence: the freeze's real trigger is a build in the
+  field that this project does not control, not a milestone, so it is re-openable on evidence of
+  when such a build ships, never on preference for a longer or shorter window; no existing §10 rule
+  is loosened. **Specified ahead of its implementation** (the phrase used for `402` in §2a and for
+  `license`'s Postgres grammar in rev 0.16): the server had no code path for `purchase` and
+  `POST /api/v1/payments` did not exist. **The schema needs no edit**: `spec/wire-v1.schema.json`
+  validates a body's shape, a client-sent `purchase` is shape-valid like any unbranched custom
+  event, and `event_schema` membership, `unknown_event` and `reserved_event` are business-rule
+  lookups no `pattern` or `const` reproduces. As in rev 0.15, the schema is left behind a rule the
+  parser does not yet enforce, because a constraint no sender's request can exercise would pass any
+  schema/parser agreement check while diverging silently from what the revision means.
 
 - rev 0.17: **the five prose contradictions the freeze would have locked in** (§2a new, §5.1
-  `pv`, §6, §7, §8, §9) — *fix-queue Group W: W6, W7, W11, W12, W13, the last five rows in the
-  table.* Two are **narrowings** and had to land now: §8's kill-switch re-check becomes a MUST,
-  and §9 requires a client honour `Retry-After`. §2a is an **append**, which the freeze would not
-  have forbidden later, and it lands now anyway because `spec/sdk-conformance.md` C9b already
-  depends on it. §5.1, §6 and §7 change no behaviour at all — they were sentences this document
-  stated more absolutely than the server keeps.
-  **Every behaviour below was sent to the running server on the compose stack and read back out
-  of ClickHouse or off the response**, except the one row that is marked as specified ahead of
-  its implementation.
+  `pv`, §6, §7, §8, §9). Two are **narrowings** and had to land before the freeze: §8's
+  kill-switch re-check becomes a MUST, and §9 requires a client to honour `Retry-After`. §2a is an
+  **append**, which the freeze would not have forbidden later; it lands now because
+  `spec/sdk-conformance.md` C9b already depends on it. §5.1, §6 and §7 change no behaviour: they
+  were sentences stated more absolutely than the server behaves.
 
-  **W6, first half — §8's `MAY` was the outlier, so the wire moved onto the test.**
-  `spec/sdk-conformance.md` C16 **asserts** the post-`until` heartbeat ("at ~60 s one `heartbeat`,
-  then the queue drains") and the SDK rule behind it states it flat, while §8 said a client "MAY
-  retry with one `heartbeat` afterwards". A wire-conformant SDK that simply drained its queue
-  failed C16 while breaking no rule this document had — three artifacts, one of them permissive,
-  and it was the permissive one that was wrong. §8 now requires the first request after `until` to
-  be one `heartbeat` alone in its batch, before the queue. The cost of the alternative is
-  measured, not asserted: a switch still on answers `202` with a `stopped` rejection **per event**,
-  counted per event. Executed — two events under an active `web`-scoped switch returned
-  `{"rejected":[{"i":0,"reason":"stopped"},{"i":1,"reason":"stopped"}],"stop":{"until":1788188001,"scope":"web"}}`
-  and added `stopped = 2` to `ingest_counters`, while an `install` on the app surface against the
-  same switch was `202 {}` and stored (C16b). A client draining a thousand queued events spends
-  the backlog and writes a thousand Ops-card rows to learn what one event tells it. A web client
-  has no `heartbeat` and no retry, so for it the switch is only a pause.
+  **§8 — the re-check after `until` is a MUST.** C16 asserts one `heartbeat` after `until` and then
+  a drained queue, while §8 said a client "MAY retry with one `heartbeat` afterwards", so an SDK
+  that simply drained its queue failed C16 while breaking no rule here. §8 now requires the first
+  request after `until` to be one `heartbeat` alone in its batch, before the queue. Draining
+  instead is costly: a switch still on answers `202` with a `stopped` rejection, counted, for
+  **every** event, so a client draining a thousand queued events spends the backlog and writes a
+  thousand Ops-card rows to learn what one event tells it. An `install` on the app surface under a
+  `web`-scoped switch is still stored (C16b). A web client has no `heartbeat` and no retry, so for
+  it the switch is only a pause.
 
-  **W6, second half — `Retry-After` and C8's backoff are one rule now, not two that can
-  disagree.** §9 advertised the header and required nothing of the client; C8 gives a
-  `~1, 2, 4, 8 …` s backoff with ±20 % jitter. Both documents were satisfiable by an SDK whose
-  first retry fired at ~0.8 s against a server that had just said 2 s. §9 now makes honouring the
-  header a **MUST** and states the composition rather than leaving it to be inferred: **the header
-  and the backoff are both floors, and the next attempt is at the later of the two.** Four
-  consequences, each stated because each is a place two readers would have guessed differently —
-  the header binds while it is the larger; the backoff advances regardless and is never shortened
-  or reset by a smaller header (a fleet dropping back to 1 s each time it is told to is the retry
-  storm the backoff exists to prevent); an absent, unparseable or non-`delay-seconds` header is
-  treated as **absent, never as zero**, so a proxy rewriting it cannot manufacture an immediate
-  retry; and the honoured value is **clamped to the same 3 600 s ceiling C8 puts on the backoff**,
-  because §8 is the only mechanism in this protocol that may silence a client for long and it is
-  bounded, scoped and customer-set, while `Retry-After` is settable by any intermediary on the
-  path. Executed: both of this server's `429`s answer `Retry-After: 1` with a body of `{}` — the
-  per-product bucket at request 103 of 100 events each (10 300 > the 10 000 burst) and the
-  per-source bucket at request 241 (240/min). At `Retry-After: 1` the header binds only the first
-  retry. C8's assertion is corrected to the composed schedule, and C8b and C8c are added for the
-  four edges; `mockd` gains `429:<v>` / `503:<v>`, since none of the edges is reachable with a
-  fixed `2`.
+  **§9 — `Retry-After` and C8's backoff are one rule.** §9 advertised the header and required
+  nothing of the client, and C8's `~1, 2, 4, 8 …` s backoff with ±20 % jitter allowed a first retry
+  at ~0.8 s against a server that had just said 2 s. §9 now makes honouring the header a **MUST**,
+  and **the header and the backoff are both floors: the next attempt is at the later of the two.**
+  The header binds while it is the larger; the backoff advances regardless and is never shortened
+  or reset by a smaller header, since a fleet dropping back to 1 s each time it is told to is the
+  retry storm the backoff exists to prevent; an absent, unparseable or non-`delay-seconds` header
+  is **absent, never zero**, so a proxy rewriting it cannot manufacture an immediate retry; and the
+  honoured value is **clamped to C8's 3 600 s ceiling**, because §8 is the only mechanism allowed to
+  silence a client for long and it is bounded, scoped and customer-set, while any intermediary on
+  the path can set `Retry-After`. The server's `429`s answer `Retry-After: 1` with a body of `{}`,
+  so the header binds only the first retry. C8's assertion is corrected to the composed schedule,
+  C8b and C8c cover the edges, and `mockd` gains `429:<v>` / `503:<v>`, since no edge is reachable
+  with a fixed `2`.
 
-  **W7 — the `402` no document defined, and the `413` body no document named.** The product
-  has required `402 Payment Required` on `/v1/e` for `trial_expired` and `paused` since its
-  first billing revision, and C9b makes an SDK's handling of it mandatory — *"an SDK that treated it as retryable
-  would hammer the endpoint for the life of the install"* — while this document named no `402`
-  anywhere and the account API's `/v1/e` listed `202/400/413/429/503` and nothing else. Rather
-  than adding one status to two files, **§2a now states every status this endpoint answers and
-  the exact bytes of each body**, because the gap was never `402` alone: executed, the server also
-  answers `500 {"error":"internal"}`, `204` to an `OPTIONS` preflight and `405` to any other
-  method, and none of those three was documented on this path either. The `413` body is
-  `{"error":"too_large"}` — executed, a 70 101-byte envelope answers exactly that — and it had
-  been named nowhere while three of its `400` siblings were named in §2. The account API gains
-  `402`, `405` and `500` on the POST and an `options` operation for the `204`.
-  **The cross-reference that did not resolve.** The billing contract's last bullet sent the reader
-  to "wire §8" for the SDK's handling of `402`. §8 is the kill switch — a different mechanism, and
-  the only thing the two share is that both stop a client from sending. It now points at §2a.
-  **`402` is documented ahead of its implementation, and the exception is guarded rather than
-  trusted.** The server has no billing package, its account records carry no billing state, and the
-  handler's product lookup returns configuration rather than entitlement, so nothing in the
-  server can emit it; a census of the server sources for `402`, `StatusPaymentRequired`
-  and the four billing states finds no code path at all — only the guard this
-  revision adds and one ClickHouse migration comment whose upstream filename happens to contain
-  the digits. The ingest handler records the one
-  exemption with its reason, and the contract test **fails if `402` ever becomes emittable while
-  still listed** — the same shape `pendingWireDecisions` had, so the entry cannot outlive the
-  reason for it.
-  **What binds the three artifacts from now on.**
-  `internal/ingest.TestIngestResponseStatusesMatchTheWireSpecAndTheAPISchema` reads every status
-  this package can write **out of the source with go/ast** — resolving `WriteHeader`'s forwarders
-  to a fixpoint, so `writeJSON`, `writeEnvelopeError` and `writeRetry` are discovered rather than
-  listed — and compares it against §2a's table and against the account API, in both directions.
-  `TestEnvelopeErrorBodiesAreNamedInTheWireSpec` does the same for the `{"error":…}` vocabulary,
-  which is disjoint from §6's per-event one: `too_large` and `too_many_events` are not §6 reasons
-  and never appear in a `rejected` array. It mirrors `internal/ingest/api_contract_test.go` one
-  layer up, and it is what makes the `413` body a checked claim rather than a sentence.
+  **§2a — every status and body this endpoint answers.** The product's billing rules call for
+  `402 Payment Required` on `/v1/e` for `trial_expired` and `paused`, and C9b makes an SDK's
+  handling of it mandatory, while this document named no `402` and the account API listed
+  `202/400/413/429/503` for `/v1/e`. Rather than adding one status, §2a states every status this
+  endpoint answers and the exact bytes of each body, because the server also answers
+  `500 {"error":"internal"}`, `204` to an `OPTIONS` preflight and `405` to any other method, none
+  of them documented, and the `413` body, `{"error":"too_large"}`, was named nowhere. The account
+  API gains `402`, `405` and `500` on the POST and an `options` operation for the `204`. A
+  cross-reference that sent readers to §8 for an SDK's handling of `402` now points at §2a; §8 is
+  the kill switch, a different mechanism. `402` is **specified ahead of its implementation**: at
+  this revision the server could not emit it, and the server's tests record that one exemption and
+  fail if `402` becomes emittable while still listed. The server's tests also compare every status
+  and envelope `{"error":…}` body the ingest path can write against §2a, in both directions. That
+  envelope vocabulary is disjoint from §6's per-event one: `too_large` and `too_many_events` are
+  not §6 reasons and never appear in a `rejected` array.
 
-  **W12 — §5.1's `pv` promised unconditionally what §6 grants conditionally.** §5.1 said an
+  **§5.1 `pv` — an unknown `pv` is never by itself a reason to drop the row.** §5.1 said an
   engagement whose `pv` is unknown "is still stored"; §6 says one whose visitor has no live session
-  is never stored. Both are true of different conditions, and the case where they meet is the one
-  that matters — a long read whose beacon arrives after the 30-minute idle window, which is
-  precisely where §5.1 read as a promise the server does not keep. §5.1 now carries the qualifier:
-  an unknown `pv` is never *by itself* a reason to drop the row, and the live session is what
-  decides. Executed both ways against the running server, same unknown `pv` both times: with a
-  live session, `202 {}` and one stored row carrying its `e` and `sd`; with no live session,
-  `202 {"rejected":[{"i":0,"reason":"no_session_for_engagement"}]}`, one `no_session_for_engagement`
-  counter, and nothing stored.
-  **F35's proposal is declined, and recorded here so it is not re-proposed.** F35 asked that an
-  engagement whose `pv` matches a stored pageview be allowed to **re-open** the session, so a long
-  read is not lost. It is refused for one reason that does not depend on the implementation cost:
-  re-opening would let a client extend the idle window at will, which makes the session boundary
-  **something the sender controls** rather than something the server measures. Every session-scoped
-  number — visits, bounce rate, visit duration, entry and exit page — would then be a figure a
-  well-meaning SDK bug or a hostile sender could move, and no metric state
-  can flag a number that is merely *stretched*. The reading is lost; the boundary is kept.
+  is never stored. They meet in a long read whose beacon arrives after the 30-minute idle window,
+  where §5.1 read as a promise the server does not keep. The live session decides: with one, the
+  answer is `202 {}` and the row is stored with its `e` and `sd`; without one, it is
+  `202 {"rejected":[{"i":0,"reason":"no_session_for_engagement"}]}`, counted, and nothing is
+  stored. Letting an engagement whose `pv` matches a stored pageview **re-open** the session is
+  declined, and recorded so it is not re-proposed: it would let a client extend the idle window at
+  will, making the session boundary something the sender controls rather than something the server
+  measures, so every session-scoped number — visits, bounce rate, visit duration, entry and exit
+  page — could be moved by an SDK bug or a hostile sender, and no metric state can flag a number
+  that is merely *stretched*. The reading is lost; the boundary is kept.
 
-  **W13 — "everything the server drops is counted" had more than the one exemption §9 names, and
-  they are one class.** §9 exempts the pre-parse per-source bucket. `handler.go` also answers
-  `202 {}` with no counter for an **unknown product key**, which the filing named — and, measured
-  alongside it, so does every envelope `400` and the `413`. §6 now states the exemption as a class
-  rather than as a list, because every member has the same cause: `ingest_counters` is keyed on
-  `product_id`, and a request refused **before `p` has been resolved to a product row** has no
-  product to attribute. Executed: seven events under an unrecognised key, then one each of
-  `malformed`, `unsupported_version`, `empty`, `too_many_events` and `too_large`, added **no
-  `ingest_counters` row of any reason** — the table was unchanged at `accepted = 1`,
-  `geo_no_database = 1` before and after — while a product-scoped `429` on the same product added
-  `throttled = 100`, one per event of the refused envelope, exactly as §6 requires. The unknown key
-  is the member worth naming separately: the others refuse out loud, and it is acknowledged. Both
-  leave the Ops card empty, so an **empty Ops card is not evidence a product is receiving
-  nothing** — it is also what a product receiving traffic under a mistyped key looks like.
+  **§6 — the uncounted drops are one class.** §9 exempts the pre-parse per-source bucket from
+  "everything the server drops is counted", but the server also answers `202 {}` with no counter
+  for an **unknown product key**, and counts no envelope `400` and no `413`. §6 now states the
+  exemption as a class with one cause: `ingest_counters` is keyed on `product_id`, and a request
+  refused **before `p` has been resolved to a product row** has no product to attribute. A
+  product-scoped `429` still counts `throttled` once per event of the refused envelope, as §6
+  requires. The unknown key is named separately because the others refuse out loud and it is
+  acknowledged; both leave the Ops card empty, so an **empty Ops card is not evidence a product is
+  receiving nothing** — it is also what a product receiving traffic under a mistyped key looks
+  like.
 
-  **W11 — §7 forbade in general what §4 does in one row.** §7 said reserved events "cannot be
-  extended in v1" while §4's `heartbeat` row extends `heartbeat` with the keys a product
-  allowlists in `event_schema`, which `internal/ingest/gates.go`'s `allowedProps` implements as
-  `license` unioned with the product's row and C22 exercises. Rev 0.16 rewrote that very §4 row
-  without touching the contradiction, which is why it was filed as sharpened-not-answered. §7 now
-  carries the one exempting clause. Executed with `edition` allowlisted for `heartbeat`:
-  `{"license":"paid","edition":"pro"}` is `202 {}` and both values are in `install_state`, while
-  `{"license":"paid","seats":"5"}` is `prop_not_allowlisted` naming `seats`. The clause names the
-  boundary as well as the exception — no other reserved event takes an allowlist, so this is one
-  row of §4 and not a licence to widen the other six.
+  **§7 — the one reserved event that takes an allowlist.** §7 said reserved events "cannot be
+  extended in v1" while §4's `heartbeat` row extends `heartbeat` with the keys a product allowlists
+  in `event_schema` (`license` plus the product's keys, exercised by C22); rev 0.16 rewrote that
+  row without resolving the contradiction. §7 now carries the one exempting clause and names its
+  boundary: no other reserved event takes an allowlist, so this is one row of §4 and not a licence
+  to widen the other six.
 
-  **The schema needs no edit and rev 0.16 of it still matches this text**, for the reason rev 0.12
-  and rev 0.13 needed none: nothing a sender may put in an event changed. `spec/wire-v1.schema.json`
-  validates a request body; every rule in this revision is about a *response*, a *rejection* the
-  body cannot express, or a sentence that was already true of the parser.
-
-  **What Group W has left after this.** Nothing. All 15 rows are closed, `pendingWireDecisions` is
-  empty and stays as the instrument for the next question, and the one item the group filed but
-  deliberately did not fix — `products.kpi`'s `license:[A-Za-z0-9._-]{1,64}` arm, the W10 defect
-  one column over — is still open and is not a wire field.
+  **The schema needs no edit and rev 0.16 of it still matches this text**, as in rev 0.12 and
+  rev 0.13: nothing a sender may put in an event changed, and every rule here is about a response,
+  a rejection the body cannot express, or a sentence that was already true of the parser. With
+  this revision none of the wire questions recorded in rev 0.15 and rev 0.16 remains open.
 
 - rev 0.16: **the seven open wire questions are answered** (§3 `t` and `v`, §4 `heartbeat`,
-  §5.1 `e`) — *fix-queue Group W: W3, W4, W5, W9, W10, plus W14 and W15, the two the W8
-  comparator derived.* Every one is a **change to an existing field's rule**, so all seven land
-  before the end-of-M1 freeze or they can never be made. `pendingWireDecisions` in
-  `internal/ingest/wire/wire_test.go` is now **empty**: all 13 of its rows moved into
-  `schemaMutants`, where the two validators are required to agree rather than merely to stay
-  where they were. The corpus goes from 163 cases to **189** and its floor from 120 to 145, so the
-  rows cannot be quietly deleted; **15 of the widened set fail against the rev 0.15 pair**, which
-  is the mutation proof for this revision.
-  **Every behaviour stated below was sent to the running server and read back out of ClickHouse**,
-  not inferred from the code.
-  **W3, W4 and W15 — clamp everywhere, and the outlier is not always the same side.** §5.1 says an
-  `e` outside `[0, 1 800 000]` "is clamped, not rejected" and `enrich.go` clamps it; §3 says a `t`
-  outside its window becomes `ingest_ts` whatever it was. On both, `spec/wire-v1.schema.json` was
-  the outlier — `minimum: 0` on `t`, `minimum`/`maximum` on `e` — and its bounds are gone. On a `t`
-  outside `int64` the **parser** was the outlier instead: `strconv.ParseInt` failed and the whole
-  event was rejected, against a schema that states no maximum and against §3's own sentence. It
-  saturates now, and `eventTime` then substitutes `ingest_ts` exactly as it does for any other
-  out-of-window value. Executed before: `t = 99999999999999999999` →
-  `202 {"rejected":[{"i":0,"reason":"invalid_field","field":"t"}]}`; after: `202 {}` with a row
-  whose `ts` equals its `ingest_ts`. `e = 1800001` and `e = -1` store `1800000` and `0`.
-  The reason this is a clamp and not a rejection: **rejecting a whole event because a device has a
-  wrong clock is data loss**, and C15 forbids an SDK correcting its own clock, so the sender
-  cannot fix it either — the customer would read the gap as a real decline.
-  **W14 — JSON has no integer type, and only the parser could close it.** `type: integer` in JSON
-  Schema accepts `1785578400000.0` and `1.7855784e12`; `optionalInteger` ran `strconv.ParseInt`
-  over the raw bytes and accepted neither. A sender computing a timestamp in floating point —
-  `time.time() * 1000` in Python, anything that round-trips through a JavaScript number — lost
-  **every event** to `invalid_field` while a conformance run (`spec/sdk-conformance.md` W1)
-  validated the same body and passed. No `pattern` can express a lexical rule about a number, so
-  agreement could only come from the parser, and it is the parser that moved. It affects **five**
-  fields, not the three the filing named: `optionalInteger` is called for `t`, `w`, `h`, `e` and
-  `sd`. A genuine fraction is still `invalid_field` — `t = 1.5` was rejected before and is
-  rejected now. Executed: the integer, zero-fraction and exponent spellings of one instant all
-  store `ts_ms = 1788182242000`.
-  **The precision edge, decided rather than left to be found.** A float64 cannot represent every
-  int64, so a `strconv.ParseFloat` route would answer `9007199254740992` for `9007199254740993.0`
-  — one millisecond from the value the sender wrote, silently, on a product whose one promise is
-  that no number is shown unless it is true. The conversion walks the digits instead: **exact for
-  every value `int64` holds, saturating and never rounding outside it**, and it refuses forms JSON
-  does not have (`0x1p-2`, `1_000`, `1/2`, `Inf`) rather than delegating to a parser that accepts
-  them. An absurd exponent (`1e400`) saturates without being materialised.
-  **W5 — `v` adopts the pattern that existed only in the schema.** `^[a-z]+/[0-9A-Za-z.+-]{1,24}$`
-  is normative §3 prose now and the parser enforces it. This **rejects values the server accepted
-  and stored** — executed before the change, `1.2.0`, `Web/1.2.0` and `Electron/1.0` were all
-  `202` and all three are in `events.client_ver` — so it is a narrowing, and a narrowing is
-  precisely what the freeze forecloses. It is worth making because `client_ver` is
-  `LowCardinality(String)` in `events` and in `ingest_counters` and **nothing folds it**: unlike a
-  heartbeat install-property value, which `foldValue` caps at 50 distinct values per key, this
-  column has no ceiling but the grammar. Nothing is deployed, so there is no stored data to
-  migrate; the whole cost is in what SDKs may send, and no SDK exists yet.
-  **`v: ""` means absent, stated and not implied.** Rev 0.15 already made an empty optional `f`
-  and `a` mean *absent*; `v` is the same, and §3 now says so in as many words rather than leaving
-  a sender to deduce it from the pattern's `{1,24}` tail, which reads as forbidding the empty
-  string. The schema carries it the same way `f` and `a` carry it, as `anyOf: ["" , pattern]`.
-  **W9 — the heartbeat cap is 20, not 5.** §4's "up to 5 keys" was enforced by nothing, and every
-  other artifact already said 20: the parser's `MaxProps`, `event_schema`'s Postgres CHECK on
-  `allowed_props`, the account API, and `$defs/props`'s `maxProperties`. §4 moved to 20. Executed:
-  seven keys are `202 {}`, twenty-one are `invalid_field` naming `props`. §4 also now says what
-  actually bounds a heartbeat in practice — the product's allowlist, whose own ceiling is 20 —
-  because the cap and the allowlist are different refusals with different reasons.
-  **W10 — `license` takes the general install-property grammar, on both sides.** §4 gave `license`
-  its own `^[a-z0-9_-]{1,24}$` with no dot, while `validateReserved` has always applied
-  `^[a-z0-9_.-]{1,24}$` to every heartbeat prop including `license`. §4 moved onto the general
-  grammar; executed, `license: "paid.tier"` is accepted and stored in `install_state`.
-  **The half that was not on the wire at all.** `products.paid_license_value` — the Settings value
-  `license_conversion` compares a stored `license` against with `s.license = {paid:String}` — was
-  a free string in the account API and `^[A-Za-z0-9._-]{1,64}$` in Postgres, **wider than any
-  conformant app can send**. Executed on the compose stack: Postgres accepted `Paid` and a
-  52-character capitalised value, and against `install_state` rows holding `paid`, the numerator
-  for `Paid` was **0 out of a denominator of 4**. That is a true `0 %` the customer cannot
-  distinguish from a real one, and because the query *succeeds* it is below the level any
-  metric state can reach. The account API gains the pattern **and** the CHECK
-  narrows (migration `20260831140000`, Postgres, goose): the API schema alone would have been a rule
-  nothing executes, since no PATCH handler exists yet, and this repo reserves "CHECK as backstop
-  only" for *array* columns whose NULL and empty entries a per-row regex structurally cannot see —
-  every scalar column here states its real grammar. The Postgres store now reads the grammar off
-  `wire.InstallPropertyValueOK` rather than keeping a second copy of it.
-  **What this does NOT close.** Group W keeps W6 (the kill-switch `MAY` against C16's assertion,
-  and `Retry-After` against C8's backoff), W7 (`402` and the `413` body, unnamed in §9), W11, W12
-  and W13. **W11 is sharpened by W9 and not answered by it**: §7 still says reserved events
-  "cannot be extended in v1" while §4's `heartbeat` row still extends `heartbeat`, and this
-  revision rewrote that very row without touching the contradiction. `products.kpi`'s
-  `license:[A-Za-z0-9._-]{1,64}` arm is the W10 defect one column over — a KPI naming a license
-  value no app can send renders a true `0` forever — and is left filed rather than fixed here,
-  because `kpi` is not a wire field and S16 settled that contract three commits ago.
+  §5.1 `e`). Every one is a **change to an existing field's rule**, so all seven land before the
+  end-of-M1 freeze or can never be made, and after this revision the schema and the server's
+  parser agree on each.
+  **`e` and `t` clamp everywhere.** §5.1 says an `e` outside `[0, 1 800 000]` "is clamped, not
+  rejected", and the server clamps it; §3 says a `t` outside its window becomes `ingest_ts`
+  whatever it was. On both, `spec/wire-v1.schema.json` was the outlier — `minimum: 0` on `t`,
+  `minimum`/`maximum` on `e` — and those bounds are gone. On a `t` outside `int64` the parser was
+  the outlier, rejecting the whole event against a schema that states no maximum and against §3;
+  it now saturates and substitutes `ingest_ts` as for any other out-of-window value, so
+  `t = 99999999999999999999` is `202 {}` with a `ts` equal to its `ingest_ts`, and `e = 1800001`
+  and `e = -1` store `1800000` and `0`. A clamp and not a rejection, because **rejecting a whole
+  event because a device has a wrong clock is data loss**, and C15 forbids an SDK correcting its
+  own clock, so the sender cannot fix it either and the customer would read the gap as a decline.
+  **JSON has no integer type, and only the parser could close it.** `type: integer` accepts
+  `1785578400000.0` and `1.7855784e12`; the parser accepted neither, so a sender computing a
+  timestamp in floating point — `time.time() * 1000` in Python, anything that round-trips through a
+  JavaScript number — lost every event to `invalid_field` while a conformance run
+  (`spec/sdk-conformance.md` W1) validated the same body and passed. No `pattern` can express a
+  lexical rule about a number, so the parser moved, for all five integer fields: `t`, `w`, `h`, `e`
+  and `sd`. The integer, zero-fraction and exponent spellings of one instant now store the same
+  value; a genuine fraction (`t = 1.5`) is still `invalid_field`. **The conversion is exact for
+  every value `int64` holds, saturating and never rounding outside it** — a float64 route would
+  answer `9007199254740992` for `9007199254740993.0`, silently — and it refuses forms JSON does not
+  have (`0x1p-2`, `1_000`, `1/2`, `Inf`); an absurd exponent (`1e400`) saturates without being
+  materialised.
+  **`v` adopts the pattern that existed only in the schema.** `^[a-z]+/[0-9A-Za-z.+-]{1,24}$` is
+  normative §3 prose now and the parser enforces it. It rejects values the server used to accept
+  and store (`1.2.0`, `Web/1.2.0`, `Electron/1.0`), so it is a **narrowing**, the class the freeze
+  forecloses. It is worth making because `client_ver` is `LowCardinality(String)` in `events` and
+  in `ingest_counters` and nothing folds it: unlike a heartbeat install-property value, folded at
+  50 distinct values per key, it has no ceiling but the grammar. Nothing was deployed and no SDK
+  existed yet, so there was no stored data to migrate. **`v: ""` means absent**, as rev 0.15 made
+  an empty `f` and `a` mean: §3 says so rather than leaving a sender to deduce it from the
+  pattern's `{1,24}` tail, and the schema carries it as `anyOf: ["" , pattern]`.
+  **The heartbeat cap is 20, not 5.** §4's "up to 5 keys" was enforced by nothing, and every other
+  artifact already said 20 — the parser, `event_schema`'s Postgres CHECK on `allowed_props`, the
+  account API and `$defs/props`'s `maxProperties` — so §4 moved to 20: seven keys are `202 {}`,
+  twenty-one are `invalid_field` naming `props`. §4 also names what bounds a heartbeat in practice,
+  the product's allowlist with its own ceiling of 20, because the cap and the allowlist are
+  different refusals with different reasons.
+  **`license` takes the general install-property grammar, on both sides.** §4 gave `license` its
+  own `^[a-z0-9_-]{1,24}$` with no dot, while the parser has always applied `^[a-z0-9_.-]{1,24}$`
+  to every heartbeat prop including `license`; §4 moved onto the general grammar, so
+  `license: "paid.tier"` is accepted. Off the wire, `products.paid_license_value` — the value
+  `license_conversion` compares a stored `license` against — was a free string in the account API
+  and `^[A-Za-z0-9._-]{1,64}$` in Postgres, **wider than any conformant app can send**: a value such
+  as `Paid` matches no stored `license`, so `license_conversion` reads a true `0 %` the customer
+  cannot tell from a real one, and because the query succeeds no metric state can flag it. The
+  account API gains the pattern and the Postgres CHECK narrows, because the API schema alone would
+  have been a rule nothing executes while no API write path for the value existed.
+  **Left open here and answered in rev 0.17**: §8's kill-switch `MAY` against C16's assertion,
+  `Retry-After` against C8's backoff, the unnamed `402` and `413` body, §5.1's `pv` against §6,
+  §6's uncounted drops, and §7's "cannot be extended in v1" against §4's `heartbeat` row, which this
+  revision rewrote without resolving it.
 
 - rev 0.15: **the executable schema is brought level with the parser** (§5.1 `f`, §5.2 `a`, and
-  `spec/wire-v1.schema.json` throughout) — *fix-queue Group W, W8.* Nothing the server accepts or
-  rejects changed. This is §10's fourth line applied at scale — "when they disagree the schema is
-  wrong and is fixed to match this text" — plus two sentences of this document that were true of
-  the parser and written nowhere.
-  **How it was measured, because the count in the filing was not reproducible.** A comparator ran
-  220 candidate events through the compiled schema and through `wire.ParseEvent` and reported
-  every case where the two disagreed on accept/reject: **64**, not the 31 the filing claimed. 53
-  were schema defects, fixed here. 11 are open questions and are listed at the bottom of this
-  entry. The comparator is not a throwaway: it is `validateBothWays` in
-  `internal/ingest/wire/wire_test.go`, and the candidate set is that file's `schemaMutants`, which
-  goes from 73 cases to 163. **52 of the widened set fail against the rev 0.14 schema** — that is
-  the mutation proof, and it is also the answer to why W1–W5 had to be found by a human reading
-  the two files side by side while this test was green.
-  **The class that mattered: a field on the wrong surface.** The schema stated every field
-  constraint globally; the parser applies §5.1 only to `s = "web"` events and §5.2 only to
-  `s = "app"` ones. Under §10 a field the surface does not define is an unknown field, which the
-  server MUST ignore rather than reject — so 16 of the 64 were the schema rejecting an event the
-  server stores. The sharpest was `iid` on a web event, which the schema forbade outright with
-  `not: {required: ["iid"]}`: no sentence of this document says that, `parseWeb` never looks at
-  `iid`, and the rule would have failed a conformant SDK for a field the server ignores. Every
-  §5.1 constraint now lives under `if s = "web"` and every §5.2 constraint under `if s = "app"`.
-  **§4's Surface column is normative and the schema bound one row of it.** `engagement` had a
-  branch; `pageview`, `click:download`, `click:outbound`, `heartbeat`, `install` and
-  `onboarding:<step>` did not, so the schema accepted a `heartbeat` on the web surface and a
-  `pageview` on the app surface that `validateReserved` answers `invalid_field` naming `s`. All
-  seven rows are now branches.
-  **`click:outbound` had no branch at all.** §4 gives it a fixed `url` prop and the server answers
-  `missing_field` naming `url`; the schema validated an outbound click with no `props` at all.
-  Neither fixed prop was typed either, so `{"file": 4}` and `{"file": ""}` both validated while
-  the server rejected them; `file` and `url` are now `string, minLength 1`.
-  **`heartbeat` had no branch, so no install-property value was checked.** §4 gives those values
-  `^[a-z0-9_.-]{1,24}$` and `validateReserved` enforces exactly that on every heartbeat prop; the
-  schema accepted `{"license": 5}`, `{"license": true}` and `{"license": "NOT OK"}`. The branch
-  added here asserts **only** what the parser asserts: not the narrower `license` grammar in §4's
-  own row (W10) and not the five-key cap (W9), because both are open.
-  **`fd` is a day, not a shape.** The pattern was `^\d{4}-\d{2}-\d{2}$` while the server parses
-  the value with `time.Parse`, so `2026-02-30`, `2026-02-29` and `2026-13-01` validated and were
-  then rejected by the server. The pattern is now leap-year accurate. It also applied when `f` was
-  absent, where the parser only length-checks `fd` — it is now scoped to the branch that requires
-  `fd`, which is the one §5.1 states.
-  **`u` and `r` needed a host.** §5.1 has required "a non-empty host" in as many words since rev
-  0.14, and the pattern was `^https?://`, so `https://` and `https://user@` validated while
-  `validHTTPURL` rejected them. The scheme is now matched case-insensitively, because RFC 3986
-  §3.1 makes schemes case-insensitive, `net/url` lower-cases them and the server therefore accepts
-  `HTTPS://`. The pattern approximates RFC 3986 reg-name syntax, and the approximation is a
-  measured trade, not a claim of exactness: it closes six divergences (a host-less URL, a
-  non-numeric port, a space, a backslash, a control character anywhere in the URL, and
-  %-encoding in a host, all of which `net/url` rejects and `^https?://` accepted) and opens three
-  in the other direction, because `net/url` tolerates a raw `<`, `"` and `]` inside a reg-name
-  and no `pattern` this side of a full URI grammar reproduces that. The three are asserted by
-  `TestSchemaApproximatesTheURLHostGrammar` rather than left to be rediscovered; a schema
+  `spec/wire-v1.schema.json` throughout). Nothing the server accepts or rejects changed. This is
+  §10's fourth line applied at scale — "when they disagree the schema is wrong and is fixed to
+  match this text" — plus two sentences that were true of the parser and written nowhere. Running
+  220 candidate events through the schema and through the server's parser found **64** accept/reject
+  disagreements: 53 were schema defects, fixed here, and 11 are open questions, listed at the end of
+  this entry. The comparison stays as a standing agreement test.
+  **A field on the wrong surface.** The schema stated every field constraint globally; the parser
+  applies §5.1 only to `s = "web"` events and §5.2 only to `s = "app"` ones. Under §10 a field the
+  surface does not define is an unknown field, which the server MUST ignore rather than reject, so
+  16 of the 64 were the schema rejecting an event the server stores. The sharpest was `iid` on a
+  web event, which the schema forbade with `not: {required: ["iid"]}` although no sentence of this
+  document says so and the server never reads it there. Every §5.1 constraint now lives under
+  `if s = "web"` and every §5.2 constraint under `if s = "app"`.
+  **§4's Surface column is normative.** Only `engagement` had a branch, so the schema accepted a
+  `heartbeat` on the web surface and a `pageview` on the app surface that the server answers
+  `invalid_field` naming `s`; all seven rows are branches now. `click:outbound` had none at all:
+  §4 gives it a fixed `url` prop and the server answers `missing_field` naming `url`, while the
+  schema validated one with no `props`. Neither fixed prop was typed, so `{"file": 4}` and
+  `{"file": ""}` validated while the server rejected them; `file` and `url` are now
+  `string, minLength 1`. With no `heartbeat` branch no install-property value was checked
+  (`{"license": 5}`, `{"license": true}` and `{"license": "NOT OK"}` validated); the new branch
+  asserts `^[a-z0-9_.-]{1,24}$`, **only** what the parser asserts — not §4's narrower `license`
+  grammar and not its five-key cap, both still open.
+  **`fd` is a day, not a shape.** `^\d{4}-\d{2}-\d{2}$` let `2026-02-30`, `2026-02-29` and
+  `2026-13-01` validate while the server parses the value as a calendar date and rejects them. The
+  pattern is now leap-year accurate, and it is scoped to the branch that requires `fd`, the one
+  §5.1 states, since with `f` absent the parser only length-checks `fd`.
+  **`u` and `r` need a host.** §5.1 has required "a non-empty host" since rev 0.14, but
+  `^https?://` let `https://` and `https://user@` validate while the server rejected them. The
+  scheme is now matched case-insensitively (RFC 3986 §3.1; the server accepts `HTTPS://`), and the
+  host pattern approximates RFC 3986 reg-name syntax as a measured trade: it closes six divergences
+  (a host-less URL, a non-numeric port, a space, a backslash, a control character anywhere in the
+  URL, %-encoding in a host) and opens three the other way, because the server's URL parser
+  tolerates a raw `<`, `"` and `]` inside a reg-name and no `pattern` short of a full URI grammar
+  reproduces that. The three are pinned by a test rather than left to be rediscovered; a schema
   stricter than the server there rejects only hosts no sender emits.
-  **`pv`, and a correction to the rev 0.14 entry below.** That entry left `pv` on the permissive
-  `#/$defs/uuid` reasoning that constraining it "would make the schema stricter than the parser
-  rather than equal to it". On an `engagement` the opposite is true: `pv` is the `id` of a
-  pageview, §3 forbids a nil `id`, and `validateReserved` answers `missing_field` naming `pv` for
-  a nil one — so the schema was the **looser** of the two and accepted an engagement the server
-  drops. `pv` is now `#/$defs/nonNilUuid` inside the `engagement` branch and stays permissive on
-  every other web event, which is what rev 0.14 intended.
-  **The two prose sentences.** §5.1 `f` and §5.2 `a` now say an empty value is an absent one.
-  `optionalString` has always returned `""` for both an absent field and an empty one, and the
-  parser has always skipped the pattern check on the empty value — `r` already said so in as many
-  words. Writing it down is what lets the schema accept `""` there without being wrong; nothing a
-  sender may send changed.
-  **What is deliberately NOT resolved.** The other 11 are questions this revision has no standing
-  to answer. They are recorded in `pendingWireDecisions` in the same test file — 13 rows, the 11
-  live disagreements plus W9 and W10, where the two validators agree with each other and with
-  neither §4's own row — and each row asserts what **each** side does today and fails if either
-  moves, so none of them can be answered silently and the suite cannot go green by having
-  forgotten them. They are W3 (`e` over the cap and negative: §5.1 clamps, the schema rejects,
-  `enrich.go` clamps), W4 (`t` before the epoch, against C15's ban on an SDK correcting its
-  clock), W5 (`v`'s pattern exists only in the schema), W9 (the five-key heartbeat cap nothing
-  enforces — measured on the running server, seven keys clear the wire and are then stopped by
-  the product's `event_schema` allowlist, whose own ceiling is 20) and W10 (`license`'s grammar
-  in three documents), plus two the comparator derived that the Group W table does not name.
-  **JSON has no integer type**, so `type: integer` accepts `1785578400000.0` and `1.7855784e12`
-  while `strconv.ParseInt` over the raw bytes does not — a sender computing `t` in floating point loses
-  the whole event to `invalid_field` while a conformance run calls the body valid, and no
-  `pattern` can express the lexical rule, so agreement can only come from the parser — and a `t`
-  outside `int64` is rejected by the parser and accepted by a schema that states no maximum,
-  which is W4 one bound further out.
+  **`pv`, correcting rev 0.14.** That entry left `pv` on the permissive `#/$defs/uuid` so as not to
+  make the schema stricter than the parser. On an `engagement` the opposite held: `pv` is the `id`
+  of a pageview, §3 forbids a nil `id`, and the server answers `missing_field` naming `pv` for a nil
+  one, so the schema was the **looser** side and accepted an engagement the server drops. `pv` is
+  now `#/$defs/nonNilUuid` inside the `engagement` branch and stays permissive on every other web
+  event, which is what rev 0.14 intended.
+  **Two prose sentences.** §5.1 `f` and §5.2 `a` now say an empty value is an absent one, which the
+  parser has always done, skipping the pattern check on `""`, and which `r` already said. Writing
+  it down lets the schema accept `""` there without being wrong; nothing a sender may send changed.
+  **Deliberately not resolved.** The 11 open disagreements, plus the heartbeat cap and the `license`
+  grammar, where schema and parser agree with each other but not with §4's own row, are each pinned
+  in their current state on both sides, so none can be answered silently. They are: `e` over the
+  cap or negative (§5.1 and the server clamp, the schema rejects); `t` before the epoch, against
+  C15's ban on an SDK correcting its clock; `v`'s pattern, which existed only in the schema; the
+  five-key heartbeat cap nothing enforced (seven keys clear the wire and are then stopped by the
+  product's `event_schema` allowlist, whose own ceiling is 20); `license`'s grammar; JSON's lack of
+  an integer type, so `type: integer` accepts `1785578400000.0` and `1.7855784e12` while the parser
+  does not; and a `t` outside `int64`, rejected by the parser and accepted by a schema that states
+  no maximum. Rev 0.16 answers all of them.
 
-- rev 0.14: **`r` is pinned absolute and `id` may not be the nil UUID** (§3, §5.1) — *fix-queue
-  Group W, W1 and W2.* Both are **changes to an existing field's rule**, not appends, so both land
-  before the end-of-M1 freeze or they can never be made: after it, the only repair for either
-  would be a second field carrying the corrected meaning beside the broken one.
-  **W1.** `internal/ingest/wire/wire.go` has always required `r` to be an absolute `http(s)` URL
-  with a non-empty host, and rejects the **whole pageview** `invalid_field` when it is not. §5.1
-  said only "URL string ≤ 2 048" and `spec/wire-v1.schema.json` enforced only `maxLength`, so
-  the snippet's specification was free to specify — and did specify — that a same-origin
-  referrer is "sent as path-only so the server never stores the host". Nothing had ever executed
-  the three together, because `web/snippet/` does not exist; the first internal navigation on a
-  customer's site would have lost its pageview outright, and the customer would have read the
-  gap as a real decline. The wire is right and the snippet is wrong, for two measured reasons.
-  *The path-only rule buys no privacy:* on a same-origin referrer the host is the customer's own
-  site, which the server already has — `internal/ingest/gates.go` reads it out of `u` as the
-  `origin_not_allowed` check (§6) and refuses the event unless it is one of the product's own
-  domains — so sending it discloses nothing the request did not already carry. *And it costs the
-  privacy it claims to buy:* enrich.go blanks a same-product referrer **host and path together**,
-  so the full form stores nothing at all, while the path-only form has no host to match, keeps
-  the blanking branch from firing, and stores the bare path. Executed: `r = "/pricing"` yields
-  `ref_host = "" ref_path = "/pricing"`; `r = "https://eqbase.app/pricing"` yields both empty.
-  The path-only rule stores strictly more about a customer's visitors than the rule replacing it.
-  **W2.** `ParseUUID` accepts the nil UUID, so a present `id` of
-  `00000000-0000-0000-0000-000000000000` set `IDProvided` and became a real dedup key. §5.2 has
-  always forbidden a nil `iid` and the parser has always enforced it; `id` had no such rule, and
-  `id` is the field where it matters more, because the dedup window acts on it. Executed against
-  the handler before the fix: **three distinct pageviews sharing a nil `id` stored one row**, the
-  two suppressions invisible because a `duplicate` is counted and not returned without
-  `?debug=1`, so the response body was `{}` and the status `202`. An SDK that zero-initialises the
-  field would have thrown away a product's traffic while being told it had been received.
+- rev 0.14: **`r` is pinned absolute and `id` may not be the nil UUID** (§3, §5.1). Both are
+  **changes to an existing field's rule**, not appends, so both land before the end-of-M1 freeze or
+  never: after it, the only repair for either would be a second field carrying the corrected
+  meaning beside the broken one.
+  **`r`.** The server has always required `r` to be an absolute `http(s)` URL with a non-empty host
+  and rejects the **whole pageview** `invalid_field` when it is not, while §5.1 said only "URL
+  string ≤ 2 048" and the schema enforced only `maxLength`. So the snippet's specification was free
+  to say, and did say, that a same-origin referrer is "sent as path-only so the server never stores
+  the host"; with no snippet built yet nothing had exercised the three together, and the first
+  internal navigation on a customer's site would have lost its pageview, read by the customer as a
+  real decline. The wire is right and the snippet was wrong. *Path-only buys no privacy:* on a
+  same-origin referrer the host is the customer's own site, which the request already carries in
+  `u` and which the `origin_not_allowed` check (§6) requires to be one of the product's own domains.
+  *And it costs the privacy it claims to buy:* the server blanks a same-product referrer's host and
+  path together, so the full form stores nothing, while a path-only `r` has no host to match and is
+  stored as the bare path — strictly more about a customer's visitors.
+  **`id`.** A nil UUID was accepted as a present `id` and became a real dedup key. §5.2 has always
+  forbidden a nil `iid`; `id` had no such rule, and it matters more there because the dedup window
+  acts on it. Three distinct pageviews sharing a nil `id` stored one row, and because a `duplicate`
+  is counted and not returned without `?debug=1` the response was `202 {}`: an SDK that
+  zero-initialises the field would lose a product's traffic while being told it was received.
   **No new rejection reason.** Both take `invalid_field` with `field` naming `r` or `id`, which is
-  what §6 already means by "§3–§5 violations; `field` names it" and what the parser already
-  emits. A new reason would be a wire addition, permanent, and would need its own row in the
-  frozen enum and its own arm in `internal/ingest/api_contract_test.go`, to say something
-  `invalid_field` already says precisely.
-  **The schema needed an edit this time, and rev 0.12 and 0.13 did not.** Those two changed
-  nothing executable; these two change what is accepted, and `spec/wire-v1.schema.json` is loaded
-  by the server's agreement test and by every conformance run (`spec/sdk-conformance.md` W1,
-  and the snippet's own suite), so a rule left out of it is a rule nothing checks. It is brought into
-  agreement at rev 0.14, from the rev 0.11 the rev 0.13 entry recorded: `r` takes
-  `#/$defs/referrer` (`""` or an absolute `http(s)` URL — the empty string is legal and
-  the fixture corpus sends it), and `id` and `iid` take a new `#/$defs/nonNilUuid`. `pv` is
-  deliberately **left** on the permissive `#/$defs/uuid`: a nil `pv` on an `engagement` is already
-  `missing_field` in §5.1, and on any other web event it is ignored, so constraining it would make
-  the schema stricter than the parser rather than equal to it. `iid` is included because its rule
-  existed in prose and in the parser but never in the schema — §10's "when they disagree the
-  schema is wrong" applies, and leaving it out would have moved W2's asymmetry rather than closed
-  it.
-  **What pinning `r` to `http(s)` does not foreclose.** `android-app://com.reddit.frontpage` is a
-  referrer Chrome on Android really produces, and Plausible accepts the scheme and maps the package
-  back to a source. Jelto does not, and a visit from a native app is counted as direct.
-  Accepting a third scheme later **widens** what the
-  server takes; it breaks no sender that was conformant under this revision, which is the only
-  thing §10's "a change that would break an existing client is a new path" protects against. So the
-  freeze locks the narrowing in, not the widening out — and the narrowing is the half that had to
-  land now, because it is what stops the snippet being written to a rule the server rejects.
+  what §6 already means by "§3–§5 violations"; a new reason would be a permanent addition to the
+  frozen enum saying what `invalid_field` already says precisely.
+  **The schema needed an edit**, unlike rev 0.12 and rev 0.13, because these rules change what is
+  accepted, and `spec/wire-v1.schema.json` is what the server's parser is checked against and what
+  every conformance run validates (`spec/sdk-conformance.md` W1, and the snippet's own suite). It
+  moves from rev 0.11 to rev 0.14: `r` takes `#/$defs/referrer` (`""` or an absolute `http(s)` URL;
+  the empty string is legal and the fixture corpus sends it), and `id` and `iid` take a new
+  `#/$defs/nonNilUuid`. `iid` is included because its rule existed in prose and in the parser but
+  never in the schema, and leaving it out would have moved the nil-UUID asymmetry rather than closed
+  it. `pv` is deliberately left on the permissive `#/$defs/uuid`, on the reasoning that
+  constraining it would make the schema stricter than the parser (rev 0.15 corrects this for
+  `engagement`).
+  **What pinning `r` to `http(s)` does not foreclose.** Chrome on Android really produces referrers
+  such as `android-app://com.reddit.frontpage`; Jelto counts such a visit as direct. Accepting a
+  third scheme later **widens** what the server takes and breaks no sender conformant under this
+  revision, which is all §10's "a change that would break an existing client is a new path"
+  protects against. The freeze locks the narrowing in, not the widening out, and the narrowing had
+  to land now so that the snippet was not written to a rule the server rejects.
 
-- rev 0.13: **`vid` reserved for the opt-in cookie mode** (§10) — *the snippet's cookie mode.*
-  The original sequencing decision said the one thing to do before the freeze was to keep the wire
-  from foreclosing cookie mode. Checked against this document, **it does not foreclose it**, and
-  recording that is the point of this entry: §10's first two lines already permit an append, §10's
-  third line already promises that unknown fields are ignored rather than rejected, and **nothing
-  in this document asserts that a web identifier is never client-supplied** — that sentence lives
-  in a design document outside this contract, which is amendable and not frozen. So a `vid` field can be appended at M4 with
-  no more cost than any other append, and adding an inert one now would be specifying a field for
-  a feature whose shape is three milestones from being designed.
-  **(2026-09-02: that append is now M3, not M4 — the product plan moved the mode. This entry keeps its
-  original wording because it is the record of what rev 0.13 decided, and the correction carries
-  no revision of its own: the contract did not change. §10 permitted the append before the freeze
-  and permits it now, on the same terms and at the same cost; only the date moved, and a date is
-  not a wire rule. What rev 0.13 bought — the reserved NAME, the one thing a later append cannot
-  work around — is exactly what makes moving the date free.)**
-  What the freeze *does* make irreversible is §10's second line: a name, once used, never means
-  something else. That is the one thing a later append cannot work around, so the name — and only
-  the name — is taken now. **The schema needs no edit and rev 0.11 of it still matches this
-  text**, for the same reason rev 0.12 needed none: nothing executable changed.
+- rev 0.13: **`vid` reserved for the opt-in cookie mode** (§10) — *the snippet's cookie mode.* The
+  plan was that the one thing to do before the freeze was to keep the wire from foreclosing cookie
+  mode, and checked against this document **it does not foreclose it**: §10's first two lines
+  already permit an append, its third line promises that unknown fields are ignored rather than
+  rejected, and **nothing in this document asserts that a web identifier is never
+  client-supplied** — that claim lives outside this contract, where it is amendable and not frozen.
+  So a `vid` field can be appended at M4 at no more cost than any other append, and an inert one now
+  would specify a field for a feature three milestones from being designed. **(2026-09-02: that
+  append is now M3, not M4 — the product plan moved the mode. This entry records what rev 0.13
+  decided, and the correction carries no revision of its own: only the date moved, a date is not a
+  wire rule, and the reserved name is what makes moving it free.)** What the freeze *does* make
+  irreversible is §10's second line: a name, once used, never means something else — the one thing
+  a later append cannot work around — so the name, and only the name, is taken now. **The schema
+  needs no edit and rev 0.11 of it still matches this text**: nothing executable changed.
 
-- rev 0.12: **`sd` stops claiming to be monotone** (§4, §5.1) — *fix-queue S19d.* This is a change
-  to an existing field's semantics, not an append, and it lands **before** the end-of-M1 freeze
-  deliberately: after the freeze the same correction could only be made by appending a second
-  field, which is strictly more expensive for a claim no sender and no reader ever relied on.
-  Nothing consumes the monotonic reading today — `sdk/` and `spec/conformance/` do not exist,
-  `internal/ingest/wire/wire.go` enforces only the `0–100` range, and
-  `spec/wire-v1.schema.json` constrains `sd` to `integer, 0..100` and nothing more, so **the
-  schema needs no edit and rev 0.11 of it still matches this text**. What was wrong: `sd` is a
-  monotone numerator (deepest pixel reached) over a divisor that can grow (document height), so
-  it is not itself monotone. Requiring it never to decrease made the *stale* percentage the
-  contractual one — a document that grew after a beacon went out kept the older, higher number
-  and no honest later value could displace it, on a product whose one promise is that no number
-  is shown unless it is true. The metrics change their
-  reduction to match, and the snippet drops the clamp that was upholding the old rule.
-  `e` is unaffected and keeps `max()`: engaged time has no divisor.
+- rev 0.12: **`sd` stops claiming to be monotone** (§4, §5.1). A change to an existing field's
+  semantics, not an append, landing **before** the end-of-M1 freeze deliberately: after it the same
+  correction could only be a second field, strictly more expensive for a claim no sender and no
+  reader relied on. Nothing consumed the monotonic reading — no SDK or conformance suite existed
+  yet, the server enforces only the `0–100` range, and `spec/wire-v1.schema.json` constrains `sd`
+  to `integer, 0..100` and nothing more — so **the schema needs no edit and rev 0.11 of it still
+  matches this text**. `sd` is a monotone numerator (deepest pixel reached) over a divisor that can
+  grow (document height), so it is not itself monotone. Requiring it never to decrease made the
+  *stale* percentage the contractual one: a document that grew after a beacon went out kept the
+  older, higher number and no honest later value could displace it, on a product whose one promise
+  is that no number is shown unless it is true. The metrics change their reduction to match, and
+  the snippet drops the clamp that upheld the old rule. `e` is unaffected and keeps `max()`:
+  engaged time has no divisor.
 
-- rev 0.11: **numeric prop values keep the string column** (§3 `props`) — *reference audit F61,
-  fix-queue S3.* No field changes; what changes is the normative sentence about what the server
-  keeps. "Coerced to string on store" did not say *which* string, and the whole decision rests on
-  the answer: `internal/ingest/enrich.go` `stringifyProps` writes `json.Number.String()`, which is
-  the verbatim JSON literal — `29.90` stays `29.90` and `1e20` stays `1e20`, neither one rounded
-  through a float. So `events.props` is lossless with respect to the wire, a typed column can be
-  derived from stored rows at any later date, and this is **not** one of the columns that had to
-  land while the tables were empty. Neither reference's route was
-  taken; the metric catalog is closed against value-reading metrics, with the
-  read shape fixed for the day one is added. The trap the finding names is real and was reproduced on
-  24.8.14.39 — `toFloat64OrZero` returns `0` for `29,90`, `$29.90` and `''` — but it is a *read*
-  expression, and a server guard test now fails the build if it is written.
+- rev 0.11: **numeric prop values keep the string column** (§3 `props`). No field changes; what
+  changes is the normative sentence about what the server keeps. "Coerced to string on store" did
+  not say *which* string, and the decision rests on the answer: the server stores the verbatim JSON
+  literal, so `29.90` stays `29.90` and `1e20` stays `1e20`, neither rounded through a float. So
+  `events.props` is lossless with respect to the wire, a typed column can be derived from stored
+  rows at any later date, and this is **not** one of the columns that had to land while the tables
+  were empty. The metric catalog is closed against value-reading metrics, with the read shape fixed
+  for the day one is added. The trap is on read — `toFloat64OrZero` returns `0` for `29,90`,
+  `$29.90` and `''` — and the server's tests fail the build if a query uses it.
 
-- rev 0.10: **wire-freeze triage** of the eighteen audit findings marked *URGENT before wire freeze*. Those were unverified auditor leads; every
-  one below was checked against this repo first, and the verdict names what was confirmed. They
-  reduce to sixteen decisions: seven changed this document, one changed the account API, and eight
-  are recorded as **no**, so the freeze closes over a decision rather than an omission.
+- rev 0.10: **wire-freeze triage** of eighteen findings raised for decision before the wire freeze,
+  each checked before it was decided. They reduce to sixteen decisions: seven changed this
+  document, one changed the account API, and eight are recorded as **no**, so the freeze closes
+  over a decision rather than an omission.
 
   **Accepted.**
 
-  1. **`h`, hash routing (§5.1)** — *tracker-snippet-1.* Confirmed: the snippet sends the
-     fragment only under `data-hash`, and `internal/ingest/enrich.go:142` appends it only under the
-     product's `hash_routing` column. The mismatch is one-directional — snippet on, product off —
-     and it flattens every hash route to one stored `path` at write time, silently, with nothing
-     rejected and nothing counted; the fragment is gone, so flipping the setting later repairs no
-     row. A per-event signal is the only fix that cannot drift, it is what Plausible does
-     (`tracker/src/track.js:144`, `request.ex:409`), and it is a pure append under §10. Present
-     `h` decides; absent `h` keeps the product setting, so legacy and server-side senders are
-     unaffected. **This spends the field name `h`** — §10 forbids reusing it, so a future viewport
-     *height* field needs a different name.
-  2. **`r` keeps the path (§5.1)** — *referrer-source-classification-5.* Confirmed:
-     `enrich.go:171` takes `referrer.Hostname()` and nothing else; there is no path column in
-     `events` or `sessions`. The wire already carries the whole referrer URL, so no field changes —
-     what changes is the normative sentence about what the server keeps, and that sentence freezes.
-     Without the path the Referrer tab can say `reddit.com 400` and can never say which subreddit,
-     which HN item or which review drove it; all three references keep it (Plausible
-     `source.ex:129`, GoatCounter `ref.go:232`, Umami `referrerPath`). The loss is one-directional:
-     dropped at ingest, unrecoverable by any re-read. Query and fragment stay discarded, which is
-     where click-id values and referring-site PII actually live, so the privacy invariants hold.
-  3. **`u` is pinned absolute, and the stored `utm_*` set is named (§5.1)** — *tracker-snippet-4,
-     feature-surface-1, referrer-source-classification-6, schema-storage-4.* `utm_*` was ambiguous
-     in a document about to freeze; it now reads as the explicit five. Confirmed:
-     `utm_content` and `utm_term` have **zero hits** anywhere in the repo, and `enrich.go:146-148`
-     reads three. No wire field is needed — `u` already carries them — so this is the freeze
-     pinning what is kept, and the storage work is tracked below.
-  4. **`w` stays MAY, with the unknown bucket named (§5.1)** — *ua-device-parsing-3.* Confirmed
-     (and already on record as V10): the screen dimension buckets `<576 mobile`, so an absent `w`
-     is `screen_w = 0` and reads as a phone. That is a read-side defect with a read-side fix, and
-     the row now says so rather than leaving the repair unstated at the freeze.
-  5. **What a `202` promises (§3 `id`, §6)** — *ingest-robustness-1.* The duplication itself was
-     confirmed and fixed before this triage (V2, `insert_deduplication_token`), but the contract
-     never stated its own delivery semantics: `grep -rn 'at-least-once|at-most-once|idempot'` over
-     `spec/` and the design documents returned nothing, and §3's `id` row read as though the 10-minute
-     window were the replay defence. It is process-local memory in the HTTP handler. SDK authors
-     build retry logic against this document; it now says at-least-once and names the real defence.
-  6. **Every drop is counted; the per-source bucket is keyed and scoped (§6, §9)** —
-     *ingest-robustness-2, ingest-robustness-3.* Confirmed by reading `handler.go`: the per-IP
-     `429` (`:75`), the per-product `429` (`:115`) and the backpressure `503` (`:119`) all return
-     before `h.countAt` is ever reached, while §6 claimed rejections are counted and §9 said
-     "Neither is stored as data" — the two sentences contradicted each other and the code matched
-     the wrong one. `ingest_counters.reason` is `LowCardinality(String)` with no closed enum, so
-     `throttled` and `backpressure` cost no migration. Confirmed for the key: `ratelimit.go:70`
-     hashes the bare address into **one process-wide map**, so a NAT's traffic to one customer
-     spends another customer's budget, at a sustained 3.33 req/s (burst 200). GoatCounter hit this
-     and fixed it by adding the UA to the key (`handlers/mw.go:432`). The status code stays
-     `429`/`503` rather than Plausible's counted `202`, because an app SDK can retry and an
-     acknowledgement would make it discard what it could have resent.
-  7. **`spam_referrer` stays in the enum, and its list stays small (§6)** — *bot-spam-filtering-3.*
-     Confirmed: `spec/signatures/referrer-spam.txt` holds 19 hosts against the 2 348 in
-     GoatCounter's `refspam.go` (counted in the tree, not taken from the finding), and
-     `gates.go:95` deletes the event. Removing the reason would break every client built against
-     v1, and importing 2 300 third-party judgements into a permanent delete is precisely what
-     this project forbids. Keeping the value while capping its scope, and putting the large list
-     on-read, is the only combination that satisfies both.
-  8. **Account API drift** — *api-contract-1.* Confirmed: the published 202 enum omitted
-     `no_session_for_engagement`, which the ingest handler emits and four test files assert, and
-     `?debug=1` was implemented but absent from the contract. A strict generated
-     client fails validation on a `202` it must accept. Fixed in the account API (v0.8.0); after
+  1. **`h`, hash routing (§5.1).** The snippet sends the fragment only under `data-hash`, and the
+     server kept it only under the product's `hash_routing` setting. The mismatch is
+     one-directional — snippet on, product off — and it flattens every hash route to one stored
+     `path` at write time, silently, with nothing rejected and nothing counted; the fragment is
+     gone, so flipping the setting later repairs no row. A per-event signal is the only fix that
+     cannot drift, and it is a pure append under §10. Present `h` decides; absent `h` keeps the
+     product setting, so legacy and server-side senders are unaffected. **This spends the field
+     name `h`** — §10 forbids reusing it, so a future viewport *height* field needs another name.
+  2. **`r` keeps the path (§5.1).** The server stored only the referrer's host, with no path column
+     in `events` or `sessions`. The wire already carries the whole referrer URL, so no field
+     changes; what changes, and freezes, is the normative sentence about what the server keeps.
+     Without the path the Referrer tab can say `reddit.com 400` and never which subreddit, which HN
+     item or which review drove it, and a path dropped at ingest is unrecoverable by any re-read.
+     Query and fragment stay discarded, which is where click-id values and referring-site PII
+     actually live, so the privacy invariants hold.
+  3. **`u` is pinned absolute, and the stored `utm_*` set is named (§5.1).** `utm_*` was ambiguous
+     in a document about to freeze; it now reads as the explicit five, of which the server read
+     three. No wire field is needed — `u` already carries them — so this pins what is kept, and the
+     storage work is listed below.
+  4. **`w` stays MAY, with the unknown bucket named (§5.1).** The screen dimension buckets
+     `<576 mobile`, so an absent `w` is `screen_w = 0` and reads as a phone. That is a read-side
+     defect with a read-side fix, and the row now says so rather than leaving the repair unstated.
+  5. **What a `202` promises (§3 `id`, §6).** The duplication behind it was already fixed
+     (`insert_deduplication_token`), but the contract never stated its own delivery semantics, and
+     §3's `id` row read as though the 10-minute window were the replay defence; it is process-local
+     memory in the server. SDK authors build retry logic against this document; it now says
+     at-least-once and names the real defence.
+  6. **Every drop is counted; the per-source bucket is keyed and scoped (§6, §9).** The per-IP
+     `429`, the per-product `429` and the backpressure `503` all returned before anything was
+     counted, while §6 claimed rejections are counted and §9 said "Neither is stored as data": the
+     two sentences contradicted each other and the server matched the wrong one.
+     `ingest_counters.reason` is `LowCardinality(String)` with no closed enum, so `throttled` and
+     `backpressure` cost no migration. The per-source bucket hashed the bare address into one
+     process-wide map, so a NAT's traffic to one customer spent another customer's budget, at a
+     sustained 3.33 req/s (burst 200). The status stays `429`/`503` rather than a counted `202`,
+     because an app SDK can retry and an acknowledgement would make it discard what it could have
+     resent.
+  7. **`spam_referrer` stays in the enum, and its list stays small (§6).**
+     `spec/signatures/referrer-spam.txt` held 19 hosts, and a match deletes the event. Removing the
+     reason would break every client built against v1, and importing some 2 300 third-party
+     judgements into a permanent delete is precisely what this project forbids. Keeping the value
+     while capping its scope, and putting the large list on-read, satisfies both.
+  8. **Account API drift.** The published `202` enum omitted `no_session_for_engagement`, which the
+     server emits, and `?debug=1` was implemented but absent from the contract, so a strict
+     generated client failed validation on a `202` it must accept. Fixed in the account API; after
      the freeze, adding a value to a published closed enum is a breaking change.
 
   **Declined — no wire change.**
 
-  9. **A root-relative `u`** — *tracker-snippet-4.* The masking case it was raised for does not
-     need it: an absolute URL whose *path* is masked (`https://site.example/:masked/alfa`) is
-     accepted today and solves it, and a customer's own origin is not the secret. Against that,
-     `gates.go:84` falls back to `u`'s host whenever the `Origin` header is absent, and that
-     fallback is the only thing keeping a product's rows on its own domains. Relaxing the type
-     would trade a real guard for a capability that already exists. The client-side half of that
-     finding — `data-auto-pageview="off"` and a first-class `jelto('pageview', {u})` — is a
-     snippet decision for M2 with no wire impact and is not blocked by the freeze.
-  10. **Narrowing web `t` to a short past window** — *identity-sessionization-2.* The defect behind
-      it is real and confirmed: `session.go:249` `Sweep` compares **server** wall time against
-      `Last.End`, which comes from the client's `t` (`enrich.go:192`), while `Feed` (`:154`)
-      correctly compares event time to event time — so a client with a slow clock has live sessions
-      evicted, and eight pageviews in one visit become eight bounced sessions. But the proposed
-      wire half does not fix it: with `t` clamped to `ingest_ts − 30 min` the same `Sweep` still
-      evicts up to 30 minutes early. It only bounds the damage, and it pays for that by destroying
-      *correct* timestamps — a beacon flushed after a laptop sleep carries a genuinely old `t`, and
-      clamping rewrites it to the wake time. The real fix is a `LastSeen` field on the session
-      state, taken from the server clock, which is code and needs no wire change. Separately, the
-      backdating vector this raises is not web-specific — the threat model already has anyone
-      POSTing to `/v1/e` with a public product key, and app `t` is equally forgeable — so a web-only
-      clamp would be a half-measure against it. It records **no row for a forged
-      `t`** at all; that gap is the right place to settle the window, for both surfaces.
-  11. **`w` as MUST for web pageviews** — *ua-device-parsing-3.* A server-side sender has no
-      viewport; making `w` required rejects its pageviews outright, which is strictly worse than
-      an honest `unknown` bucket. The bucket is the fix (accepted above, item 4).
-  12. **A viewport height field** — *ua-device-parsing-3.* The motivation given was telling a
-      rotated tablet from a laptop, but `events.device` already carries the form factor from the
-      UA, and once `screen`'s labels describe width bands instead of device names — the V10 repair —
-      nothing is left inferring a device from a width. Adding a field for a dimension no spec
-      defines is the "materialized view because it will be needed" pattern the backend rejects, and
-      the snippet's 1 800 B budget is real. Recorded with its cost stated plainly: after the freeze
-      this cannot be added, and `h` is now taken, so the name would have to differ.
-  13. **The trusted-IP-header startup check** — *geo-location-1.* Already fixed in `dd91844`
-      (with `-allow-untrusted-remote-addr` as the explicit dev escape).
-      Config and startup, never wire.
-  14. **A geo-unavailable marker** — *geo-location-2.* Confirmed and real: `geo/geo.go:121` returns
-      the same `("", "", 0)` for a `Lookup` **error** as for a genuine miss, and `geo.Empty` returns
-      it for "no database configured", so three different facts store one value and the Locations
-      card can print `(not set) 100 %` as a measured distribution. The finding's own fix needs no
-      events column — `ingest_counters.reason` is an open `LowCardinality(String)` and
-      the metric states are where the state belongs — so none of it is gated on the freeze.
-  15. **`(gclid)` medium keyed on the resolved source** — *referrer-source-classification-2.*
-      Confirmed: `enrich.go:159` requires `row.UTMSource == "google"`, so Google auto-tagging (no
-      UTM params, referrer `www.google.com`, `?gclid=…`) never takes the branch, and the classification
-      rule says "the source", which includes the referrer-derived one. Write-time enrichment on a stored
-      column, no wire field involved. Worth noting the finding's preferred fix — derive the medium
-      on read — is the one that matches this project's own on-read rule (§6).
-  16. **A `hostname` dimension, and `host` on `sessions`** — *feature-surface-2, schema-storage-3.*
-      Confirmed: `20260828090400_sessions.sql` has no host column of any kind, while `events` has
-      one; a product may own 20 domains, so `visits`, `bounce_rate`,
-      `entry_page` and `exit_page` merge every domain into one. The finding says it itself — `u`
-      already carries the full URL and the server already derives `host`, so **no wire change**.
-      Time-critical for a different reason, below.
+  9. **A root-relative `u`.** The masking case it was raised for does not need it: an absolute URL
+     whose *path* is masked (`https://site.example/:masked/alfa`) is accepted today and solves it,
+     and a customer's own origin is not the secret. Against that, the server falls back to `u`'s
+     host whenever the `Origin` header is absent, and that fallback is the only thing keeping a
+     product's rows on its own domains. The client-side half — `data-auto-pageview="off"` and a
+     first-class `jelto('pageview', {u})` — is a snippet decision for M2 with no wire impact.
+  10. **Narrowing web `t` to a short past window.** The defect behind it is real: session expiry
+      compared **server** wall time against the session's last event time, which comes from the
+      client's `t`, while extending a session compared event time to event time, so a client with a
+      slow clock had live sessions evicted and eight pageviews in one visit became eight bounced
+      sessions. The wire half does not fix it: with `t` clamped to `ingest_ts − 30 min` expiry still
+      fires up to 30 minutes early, and the clamp destroys *correct* timestamps — a beacon flushed
+      after a laptop sleep carries a genuinely old `t`, and clamping rewrites it to the wake time.
+      The real fix is a last-seen time on the session state taken from the server clock, which is
+      code and needs no wire change. Backdating is not web-specific either — anyone can POST to
+      `/v1/e` with a public product key, and app `t` is equally forgeable — so a web-only clamp
+      would be a half-measure; nothing yet records a forged `t` as a threat, and that is the place
+      to settle the window, for both surfaces.
+  11. **`w` as MUST for web pageviews.** A server-side sender has no viewport; requiring `w` rejects
+      its pageviews outright, which is strictly worse than an honest `unknown` bucket (item 4).
+  12. **A viewport height field.** It was meant to tell a rotated tablet from a laptop, but
+      `events.device` already carries the form factor from the UA, and once `screen`'s labels
+      describe width bands instead of device names nothing is left inferring a device from a width.
+      Adding a field for a dimension no spec defines, because it might be needed, is a pattern this
+      project rejects, and the snippet's 1 800 B budget is real. Recorded with its cost stated
+      plainly: after the freeze this cannot be added, and `h` is now taken, so the name would
+      have to differ.
+  13. **The trusted-IP-header startup check.** Already fixed in the server, with an explicit
+      development escape. Config and startup, never wire.
+  14. **A geo-unavailable marker.** The geo lookup stored the same empty result for a lookup error,
+      a genuine miss and no database configured, so three different facts store one value and the
+      Locations card can print `(not set) 100 %` as a measured distribution. The fix needs no
+      events column — `ingest_counters.reason` is an open `LowCardinality(String)` and the metric
+      states are where the state belongs — so none of it is gated on the freeze.
+  15. **`(gclid)` medium keyed on the resolved source.** The server required the UTM source to be
+      `google`, so Google auto-tagging (no UTM params, referrer `www.google.com`, `?gclid=…`) never
+      took the branch, while the classification rule says "the source", which includes the
+      referrer-derived one. Write-time enrichment on a stored column, no wire field involved;
+      deriving the medium on read is the fix that matches this project's own on-read rule (§6).
+  16. **A `hostname` dimension, and `host` on `sessions`.** `sessions` had no host column of any
+      kind while `events` has one, and a product may own 20 domains, so `visits`, `bounce_rate`,
+      `entry_page` and `exit_page` merge every domain into one. `u` already carries the full URL and
+      the server already derives `host`, so **no wire change**; time-critical for a different
+      reason, below.
 
   **Confirmed, not wire, and not to be lost.** Nothing here is blocked by the freeze, but three
-  items are time-critical because the ClickHouse tables are still empty and the backend's add-only
-  rule makes a late column indistinguishable from a genuine blank forever — the argument
-  `20260828090400_sessions.sql:3-10` already makes for `ua` and `screen_w`, applied to: `host` (and
-  `exit_host`) on `sessions`; `utm_content` / `utm_term` on `events` and `sessions`; `ref_path` on
-  both, for item 2 above. The remainder — the `Sweep` clock split, the geo counters, the on-read
-  `(gclid)` medium, the on-read spam list and its `make signatures` target, the `screen` unknown
-  bucket and width-band labels, `throttled` / `backpressure` counting, and the `(IP, UA)` rate-limit
-  key — are code and read-side spec, safe to land after the freeze. **None of it is implemented:**
-  this revision decided the contract, and §5.1's `h`, `r` and `u` rules are ahead of the code.
-  `spec/wire-v1.schema.json` is deliberately left at rev 0.9 rather than given an `h` constraint the
-  parser does not enforce — `internal/ingest/wire/wire_test.go:199` asserts the two **agree**, and a
-  constraint on a field no mutant carries would pass that test while diverging silently. §10's rule
-  stands: the text wins, and the schema is fixed alongside the parser when `h` lands.
+  items were time-critical because the ClickHouse tables were still empty and the add-only schema
+  rule makes a late column indistinguishable from a genuine blank forever — the argument already
+  made for `ua` and `screen_w` — applied to: `host` (and `exit_host`) on `sessions`; `utm_content` /
+  `utm_term` on `events` and `sessions`; `ref_path` on both, for item 2. The rest — the
+  session-expiry clock split, the geo counters, the on-read `(gclid)` medium, the on-read spam list
+  and its `make signatures` target, the `screen` unknown bucket and width-band labels, `throttled` /
+  `backpressure` counting, and the `(IP, UA)` rate-limit key — is code and read-side spec, safe to
+  land after the freeze. **None of it is implemented:** this revision decided the contract, and
+  §5.1's `h`, `r` and `u` rules are ahead of the code. `spec/wire-v1.schema.json` is deliberately
+  left at rev 0.9 rather than given an `h` constraint the parser does not enforce: the server's
+  tests assert that schema and parser **agree**, and a constraint on a field no test case carries
+  would pass them while diverging silently. §10's rule stands: the text wins, and the schema is
+  fixed alongside the parser when `h` lands.
 
 - rev 0.9: **`engagement` event** with `pv`, `e`, `sd` (§4, §5.1) and the rejection reason
   `no_session_for_engagement` (§6). Serves `engagement_time` and `scroll_depth`,
