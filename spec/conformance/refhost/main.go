@@ -48,13 +48,15 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 	debug := NewDebug(stderr, os.Getenv("JELTO_DEBUG") == "1")
 
 	endpoint := os.Getenv("JELTO_ENDPOINT")
+	// The diagnostics below go to stderr; one that cannot be written leaves
+	// nothing to report it to, and the exit code still carries the failure.
 	if endpoint == "" {
-		fmt.Fprintln(stderr, "refhost: JELTO_ENDPOINT is required (spec/sdk-conformance.md §3)")
+		_, _ = fmt.Fprintln(stderr, "refhost: JELTO_ENDPOINT is required (spec/sdk-conformance.md §3)")
 		return 2
 	}
 	stateDir := os.Getenv("JELTO_STATE_DIR")
 	if stateDir == "" {
-		fmt.Fprintln(stderr, "refhost: JELTO_STATE_DIR is required (spec/sdk-conformance.md §3)")
+		_, _ = fmt.Fprintln(stderr, "refhost: JELTO_STATE_DIR is required (spec/sdk-conformance.md §3)")
 		return 2
 	}
 
@@ -64,7 +66,7 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 		// 1970-01-01 clock (C15) and not "unset".
 		value, ok := new(big.Int).SetString(strings.TrimSpace(pin), 10)
 		if !ok {
-			fmt.Fprintf(stderr, "refhost: JELTO_NOW=%q is not a whole number of milliseconds\n", pin)
+			_, _ = fmt.Fprintf(stderr, "refhost: JELTO_NOW=%q is not a whole number of milliseconds\n", pin)
 			return 2
 		}
 		clock.Pin(value)
@@ -76,7 +78,7 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	platform, err := detectPlatform(appVersion)
 	if err != nil {
-		fmt.Fprintln(stderr, "refhost:", err)
+		_, _ = fmt.Fprintln(stderr, "refhost:", err)
 		return 2
 	}
 
@@ -288,7 +290,8 @@ func (h *host) settle(deadline time.Time) bool {
 	if h.sdk.awaitBarrier(barrier, time.Until(deadline)) {
 		return true
 	}
-	fmt.Fprintln(h.err, "refhost: sleep did not settle within 30 s of real time")
+	// The false return fails the command; the stderr line only explains it.
+	_, _ = fmt.Fprintln(h.err, "refhost: sleep did not settle within 30 s of real time")
 	return false
 }
 

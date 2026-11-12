@@ -14,7 +14,9 @@ func atomicWrite(path string, data []byte, durable bool) bool {
 	if err != nil {
 		return false
 	}
-	defer os.Remove(temporary)
+	// After a successful Rename the temporary is gone and Remove fails by
+	// design; on a failed write a stale temporary is truncated next time.
+	defer func() { _ = os.Remove(temporary) }()
 	if _, err = file.Write(data); err == nil && durable {
 		err = file.Sync()
 	}

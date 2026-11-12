@@ -111,10 +111,13 @@ func run(args []string, stdout, stderr *os.File) error {
 	if err != nil {
 		return err
 	}
+	// The report lines in this function go to stdout unchecked: a line that
+	// cannot be written cannot change the verdict, which run returns and the
+	// exit code carries.
 	if !*keep {
 		defer func() { _ = os.RemoveAll(work) }()
 	} else {
-		fmt.Fprintf(stdout, "working directory: %s\n", work)
+		_, _ = fmt.Fprintf(stdout, "working directory: %s\n", work)
 	}
 
 	if *mockBin == "" {
@@ -146,7 +149,7 @@ func run(args []string, stdout, stderr *os.File) error {
 
 	runner := &Runner{mock: mock, hostBin: *hostBin, validator: validator, workDir: work, out: stdout, verbose: *verbose}
 
-	fmt.Fprintf(stdout, "spec/sdk-conformance.md §4 -- %d scenario(s), host %s\n\n", len(scenarios), filepath.Base(*hostBin))
+	_, _ = fmt.Fprintf(stdout, "spec/sdk-conformance.md §4 -- %d scenario(s), host %s\n\n", len(scenarios), filepath.Base(*hostBin))
 	passed, failed, skipped := 0, 0, 0
 	started := time.Now()
 	for _, scenario := range scenarios {
@@ -154,20 +157,20 @@ func run(args []string, stdout, stderr *os.File) error {
 		switch {
 		case outcome.Skipped != "":
 			skipped++
-			fmt.Fprintf(stdout, "SKIP %-5s %s\n       %s\n", scenario.C, scenario.Title, indent(outcome.Skipped))
+			_, _ = fmt.Fprintf(stdout, "SKIP %-5s %s\n       %s\n", scenario.C, scenario.Title, indent(outcome.Skipped))
 		case outcome.Passed():
 			passed++
-			fmt.Fprintf(stdout, "PASS %-5s %s\n", scenario.C, scenario.Title)
+			_, _ = fmt.Fprintf(stdout, "PASS %-5s %s\n", scenario.C, scenario.Title)
 		default:
 			failed++
-			fmt.Fprintf(stdout, "FAIL %-5s %s\n", scenario.C, scenario.Title)
+			_, _ = fmt.Fprintf(stdout, "FAIL %-5s %s\n", scenario.C, scenario.Title)
 		}
 		if outcome.Skipped != "" {
 			continue
 		}
 		for _, arm := range outcome.Arms {
 			if arm.Error != nil {
-				fmt.Fprintf(stdout, "       arm %q could not run: %v\n", arm.Arm.Name, arm.Error)
+				_, _ = fmt.Fprintf(stdout, "       arm %q could not run: %v\n", arm.Arm.Name, arm.Error)
 			}
 			for _, check := range arm.Results {
 				if check.Passed && !*verbose {
@@ -177,11 +180,11 @@ func run(args []string, stdout, stderr *os.File) error {
 				if !check.Passed {
 					marker = "FAIL"
 				}
-				fmt.Fprintf(stdout, "     %s [%s] %s: %s\n", marker, arm.Arm.Name, check.Name, indent(check.Detail))
+				_, _ = fmt.Fprintf(stdout, "     %s [%s] %s: %s\n", marker, arm.Arm.Name, check.Name, indent(check.Detail))
 			}
 		}
 	}
-	fmt.Fprintf(stdout, "\n%d passed, %d failed, %d skipped in %s\n", passed, failed, skipped, time.Since(started).Round(time.Millisecond))
+	_, _ = fmt.Fprintf(stdout, "\n%d passed, %d failed, %d skipped in %s\n", passed, failed, skipped, time.Since(started).Round(time.Millisecond))
 	mock.Shutdown()
 	if failed > 0 {
 		return fmt.Errorf("%d scenario(s) failed", failed)

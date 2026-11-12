@@ -156,7 +156,7 @@ func (h *Host) Stop(timeout time.Duration) (exitCode int, err error) {
 		h.finish(waitErr)
 	case <-time.After(timeout):
 		_ = h.cmd.Process.Kill()
-		<-waited
+		<-waited //nolint:errcheck // Wait reports the kill; the arm reports the timeout below
 		h.finish(fmt.Errorf("host did not exit within %s of `exit`", timeout))
 	}
 	if sendErr != nil && h.waitErr == nil {

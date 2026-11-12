@@ -40,11 +40,13 @@ func TestMain(m *testing.M) {
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "mockd test: build:", err)
-		os.RemoveAll(dir)
+		_ = os.RemoveAll(dir) // best effort: the build failure is the result
 		os.Exit(1)
 	}
 	code := m.Run()
-	os.RemoveAll(dir)
+	// Best effort: a temporary directory left behind must not change the
+	// tests' exit code.
+	_ = os.RemoveAll(dir)
 	os.Exit(code)
 }
 

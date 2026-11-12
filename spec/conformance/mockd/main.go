@@ -35,7 +35,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("mockd", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Usage = func() {
-		fmt.Fprint(stderr, usage)
+		// The flag package ignores its own usage write errors too; a usage
+		// text that cannot be written leaves nothing to report.
+		_, _ = fmt.Fprint(stderr, usage)
 		flags.PrintDefaults()
 	}
 	var (

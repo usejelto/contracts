@@ -50,7 +50,7 @@ func main() {
 		if err != nil {
 			fatal("open capture: %v", err)
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }() // read-only: a Close error cannot lose data
 		input = file
 		name = *capture
 	}

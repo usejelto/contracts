@@ -19,8 +19,8 @@ include tools/quality/quality.mk
 # conformance); the scanners are platform-independent.
 check: lint test build package security conformance-twice
 
-# golangci-lint (.golangci.yml) against the findings that predate it, 19
-# unchecked Fprint and Remove errors in the command-line tools.
+# golangci-lint (.golangci.yml) against the findings that predate it. The
+# baseline is empty now that they are fixed; nothing is added to it.
 GOLANGCI_BASELINE := .golangci-baseline.json
 lint: golangci ruff
 
